@@ -6,6 +6,8 @@ export async function handlerInput(req: Request, res: Response) {
   if (body["input"] === "hello") {
     output = "hello there";
   }
-  res.header("Access-Control-Allow-Origin", "http://localhost:8080");
+  if (body["input"] === "ping") {
+    output = "pong";
+  }
   res.send(output);
 }

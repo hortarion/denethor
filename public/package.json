@@ -6,7 +6,8 @@
   "scripts": {
     "build": "npx tsc",
     "start": "node dist/index.js",
-    "dev": "npm run build && npm run start"
+    "copy": "scripts/copyIndex.sh",
+    "dev": "npm run build && npm run copy && npm run start"
   },
   "keywords": [],
   "author": "",

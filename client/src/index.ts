@@ -6,7 +6,6 @@ import {
   middlewareLogResponse,
   middlewareMetricsInc,
 } from "./api/middleware.js";
-import { handlerInput } from "./api/input.js";
 
 async function main() {
   // starting client
@@ -29,12 +28,6 @@ async function main() {
     "/api/metrics",
     (req: Request, res: Response, next: NextFunction) => {
       Promise.resolve(handlerMetrics(req, res)).catch(next);
-    },
-  );
-  client.post(
-    "/api/handleInput",
-    (req: Request, res: Response, next: NextFunction) => {
-      Promise.resolve(handlerInput(req, res).catch(next));
     },
   );
 

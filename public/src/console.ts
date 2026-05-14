@@ -49,14 +49,19 @@ async function handleOutputUpdate(): Promise<void> {
 
   // API call to backend
   if (lastLine.startsWith(">>")) {
-    const response = await fetch("http://localhost:8080/api/handleInput", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ input }),
-    });
-    const reply = await response.text();
-    if (reply.length > 0) {
-      printToPage(reply);
+    // console.log(input); // DEBUG log
+    try {
+      const response = await fetch(`/api/handleInput`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input }),
+      });
+      const reply = await response.text();
+      if (reply.length > 0) {
+        printToPage(reply);
+      }
+    } catch (err) {
+      printToPage(`API error: ${err}`);
     }
   }
 }
