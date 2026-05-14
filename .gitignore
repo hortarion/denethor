@@ -1,6 +1,7 @@
 # TypeScript/Node
 node_modules/
 client/dist/
+public/dist/
 
 # Go
 # Binaries produced by 'go build'
