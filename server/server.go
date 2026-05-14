@@ -28,6 +28,7 @@ func main() {
 	fmt.Printf("server started on http://localhost:%s\n", port)
 	err := srv.ListenAndServe()
 	log.Fatal(err)
+
 }
 
 func handlePage(w http.ResponseWriter, r *http.Request) {

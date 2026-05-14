@@ -1,5 +1,7 @@
 package internal
 
+import "fmt"
+
 var serverContent = make(map[int]string)
 
 func RegisterContent(content string) {
@@ -12,4 +14,9 @@ func PrintContent() []string {
 		content = append(content, name)
 	}
 	return content
+}
+
+func main() {
+	RegisterContent("rockPaperScissors")
+	fmt.Println(PrintContent())
 }

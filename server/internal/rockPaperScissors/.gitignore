@@ -1,0 +1,12 @@
+# Go
+# Binaries produced by 'go build'
+rockPaperScissors/rockPaperScissors
+*.exe
+*.test
+
+# Environment and Logs
+.env
+*.log
+
+# MacOS specific
+.DS_Store
