@@ -15,15 +15,25 @@ This project utilizes a decoupled microservices-oriented approach:
 ```
 .
 ├── client/
-│   ├── tsconfig.json
+│   ├── src/
+│   │   ├── index.ts
+│   │   └── api/
+│   │       ├── input.ts
+│   │       ├── metrics.ts
+│   │       └── middleware.ts
 │   ├── package.json
-│   └── src/
-├── server/
-│   ├── main.go
-│   └── go.mod
-└── internal/
-    ├── logger.go
-    └── go.mod
+│   └── tsconfig.json
+├── public/
+│   ├── src/
+│   │   ├── console.ts
+│   │   └── index.html
+│   └── scripts/
+│       └── copyIndex.sh
+└── server/
+    ├── server.go
+    ├── go.mod
+    └── internal/
+
 ```
 
 ## Infrastructure
