@@ -1,6 +1,6 @@
 # Go
 # Binaries produced by 'go build'
-rockPaperScissors/rockPaperScissors
+rockPaperScissors
 *.exe
 *.test
 
