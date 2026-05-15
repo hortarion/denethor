@@ -1,14 +1,14 @@
-package internal
+package internalRegistry
 
 import "fmt"
 
 var serverContent = make(map[int]string)
 
-func RegisterContent(content string) {
+func registerContent(content string) {
 	serverContent[len(serverContent)] = content
 }
 
-func PrintContent() []string {
+func returnContent() []string {
 	content := make([]string, 0)
 	for _, name := range serverContent {
 		content = append(content, name)
@@ -16,7 +16,13 @@ func PrintContent() []string {
 	return content
 }
 
-func main() {
-	RegisterContent("rockPaperScissors")
-	fmt.Println(PrintContent())
+func InternalRegistry() {
+	registerContent("rockPaperScissors")
+	registerContent("notImplemented")
+	registerContent("nakedWrestling")
+	content := returnContent()
+	fmt.Println("Registered applications:")
+	for _, item := range content {
+		fmt.Println(">>", item)
+	}
 }

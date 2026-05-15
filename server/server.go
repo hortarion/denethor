@@ -5,6 +5,8 @@ import (
 	"log"
 	"net/http"
 	"time"
+
+	internalRegistry "github.com/hortarion/server/internal"
 )
 
 const PORT = "8080"
@@ -22,6 +24,8 @@ func main() {
 		WriteTimeout: 30 * time.Second,
 		ReadTimeout:  30 * time.Second,
 	}
+
+	internalRegistry.InternalRegistry()
 
 	// this blocks forever, until the server
 	// has an unrecoverable error
