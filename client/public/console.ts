@@ -1,3 +1,7 @@
+/*
+  EMBEDD INTO INDEX.HTML?
+*/
+
 // Extend the Window interface to include printToOutput
 declare global {
   interface Window {
