@@ -1,21 +1,33 @@
 # TypeScript/Node
 node_modules/
-client/dist/
-public/dist/
+dist/
+*.tsbuildinfo
+.env
+.env.local
+.env.*.local
 
 # Go
-# Binaries produced by 'go build'
-server/server
-internal/internal
+bin/
 *.exe
 *.test
+*.out
 
-# Environment and Logs
-.env
-*.log
+# IDE
+.vscode/
+.idea/
 
-# MacOS specific
+# OS
 .DS_Store
+.Spotlight-V100
+.fseventsd
+.Trashes
+Thumbs.db
+*.tmp
+*.swp
 
-# Misc
-gitignore_assets/
+# Docker
+.docker/
+
+# Logs
+*.log
+.log
