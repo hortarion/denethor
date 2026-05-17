@@ -1,4 +1,4 @@
-# Distributed App Engine: Pub/Sub Architecture
+# Denethor - A Distributed App Engine: Pub/Sub Architecture
 
 An online app platform leveraging a Go authoritative server, a Go web client with JS script, RabbitMQ for distributed messaging, and Valkey for caching.
 
@@ -57,7 +57,7 @@ The entire stack is containerized for consistent development and deployment:
 ### Quick Start
 1. Clone the repository
 ```bash
-git clone https://github.com/your-repo/distributed-game.git
+git clone https://github.com/hortarion/denethor.git
 cd distributed-game
 ```
 
