@@ -11,7 +11,7 @@ This project utilizes a decoupled microservices-oriented approach:
 * **Cache** (`/cache`): Valkey for session management and high-speed state caching.
 * **Message Broker** (RabbitMQ): Orchestrates asynchronous communication between peers and the server using the Pub/Sub pattern.
 * **Database** (PostgreSQL): Provides persistent storage for user profiles, inventory, and historical game state.
-* **Internal** (`/internal`): Shared definitions and schemas (JSON/Protobuf) used to synchronize data structures between Go and TypeScript.
+* **Internal** (`/internal`): Shared definitions and schemas (JSON/Protobuf) used to synchronize data structures between Go and JavaScript.
 
 ```
 .
@@ -58,7 +58,7 @@ The entire stack is containerized for consistent development and deployment:
 1. Clone the repository
 ```bash
 git clone https://github.com/hortarion/denethor.git
-cd distributed-game
+cd denethor
 ```
 
 2. Launch the stack
