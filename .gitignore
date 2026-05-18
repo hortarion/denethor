@@ -31,3 +31,6 @@ Thumbs.db
 # Logs
 *.log
 .log
+
+# Dev
+gitignore_assets/

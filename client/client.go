@@ -24,8 +24,8 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/", http.RedirectHandler("/app/", http.StatusFound))
-	mux.Handle("/app/", apiCfg.middlewareMetricsInc(http.StripPrefix("/app/", http.FileServer(http.Dir(filePathRoot)))))
+	mux.Handle("/", http.RedirectHandler("/public/", http.StatusFound))
+	mux.Handle("/public/", apiCfg.middlewareMetricsInc(http.StripPrefix("/public", http.FileServer(http.Dir(filePathRoot)))))
 	mux.HandleFunc("/admin/metrics", apiCfg.handlerMetrics)
 
 	// port := os.Getenv("PORT")
