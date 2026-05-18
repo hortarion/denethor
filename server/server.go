@@ -39,7 +39,7 @@ func main() {
 // Needs to be removed before going into prod
 func enableCors(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 }
 
@@ -52,12 +52,17 @@ func handleInput(w http.ResponseWriter, r *http.Request) {
 
 func handlePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
-	w.WriteHeader(200)
+	w.WriteHeader(http.StatusOK)
 	const page = `<html>
 <style>
     :root {
     	--bg-color: #1e1e1e;
+     	--text-color: #ffffff;
     }
+    body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+        }
 </style>
 <head></head>
 <body>

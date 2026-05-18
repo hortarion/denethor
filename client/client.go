@@ -24,11 +24,11 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
+	// Serve webpage
 	mux.Handle("/", http.RedirectHandler("/public/", http.StatusFound))
 	mux.Handle("/favicon.ico", http.RedirectHandler("/public/favicon.ico", http.StatusFound))
-	mux.Handle("/console.js", http.RedirectHandler("/public/console.js", http.StatusFound))
-
 	mux.Handle("/public/", apiCfg.middlewareMetricsInc(http.StripPrefix("/public", http.FileServer(http.Dir(filePathRoot)))))
+	// APIs
 	mux.HandleFunc("/admin/metrics", apiCfg.handlerMetrics)
 
 	// port := os.Getenv("PORT")
@@ -40,8 +40,7 @@ func main() {
 		ReadTimeout:  30 * time.Second,
 	}
 
-	// this blocks forever, until the server
-	// has an unrecoverable error
+	// Listen until an unrecoverable error occurs
 	fmt.Printf("server started on http://localhost:%s\n", port)
 	err := srv.ListenAndServe()
 	log.Fatal(err)
@@ -52,16 +51,28 @@ func (apiCfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) 
 	w.Header().Add("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(fmt.Sprintf(`<html>
-  <body>
-    <h1>Welcome, Chirpy Admin</h1>
-    <p>Chirpy has been visited %d times!</p>
-  </body>
+	<style>
+    	:root {
+    	--bg-color: #1e1e1e;
+     	--text-color: #ffffff;
+      }
+    	body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            }
+    </style>
+	<body>
+    	<h1>Denethor - Admin</h1>
+    	<p>Denthor has been visited %d times!</p>
+    </body>
 </html>`, apiCfg.fileserverHits.Load())))
 }
 
 func (apiCfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		apiCfg.fileserverHits.Add(1)
+		if r.URL.Path == "/public/" {
+			apiCfg.fileserverHits.Add(1)
+		}
 		next.ServeHTTP(w, r)
 	})
 }
