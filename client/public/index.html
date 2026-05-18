@@ -82,8 +82,8 @@
         </style>
     </head>
     <body>
-        <h1>Welcome</h1>
-        <p>Console:</p>
+        <h1>Denethor</h1>
+        <p>Your online CLI platform:</p>
         <div id="output"></div>
         <div id="inputContainer">
             <input type="text" id="inputField" placeholder="Enter text here" />
@@ -91,6 +91,91 @@
         </div>
         <button id="themeToggle">Toggle Light/Dark</button>
 
-        <script type="module" src="console.js"></script>
+        <script>
+            const output = document.getElementById("output");
+            const inputField = document.getElementById("inputField");
+            const submitButton = document.getElementById("submitButton");
+            const themeToggle = document.getElementById("themeToggle");
+            const body = document.body;
+
+            submitButton.addEventListener("click", () => {
+                const inputText = inputField.value;
+                if (inputText.trim() !== "") {
+                    output.textContent += ">> " + inputText + "\n";
+                    inputField.value = "";
+                    output.scrollTop = output.scrollHeight;
+                }
+                output.dispatchEvent(new Event("outputUpdated"));
+            });
+
+            inputField.addEventListener("keypress", (e) => {
+                if (e.key === "Enter") {
+                    submitButton.click();
+                }
+            });
+
+            themeToggle.addEventListener("click", () => {
+                body.classList.toggle("light-mode");
+            });
+
+            window.printToOutput = function (text) {
+                output.textContent += "<< " + text + "\n";
+                output.scrollTop = output.scrollHeight;
+                output.dispatchEvent(new Event("outputUpdated"));
+            };
+
+            function printToPage(text) {
+                window.printToOutput(text);
+            }
+
+            async function handleOutputUpdate() {
+                const lines = output.textContent.trim().split("\n");
+                const lastLine = lines[lines.length - 1].trim();
+                const input = lastLine.split(" ")[1];
+
+                // API call to backend
+                if (lastLine.startsWith(">>")) {
+                    // console.log(input); //DEBUG log
+                    try {
+                        console.log("API call sent");
+                        const response = await fetch(
+                            `http://localhost:8080/api/handleInput`,
+                            {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ input }),
+                            },
+                        );
+                        const reply = await response.text();
+                        if (reply.length > 0) {
+                            printToPage(reply);
+                        }
+                    } catch (err) {
+                        console.log(`Could not reach server: ${err}`);
+                    }
+                }
+            }
+
+            // Event listener
+            output.addEventListener("outputUpdated", async () => {
+                console.log("outputUpdated event fire");
+                await handleOutputUpdate();
+            });
+
+            // Ensure the DOM is fully loaded before attaching listeners
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", () => {
+                    // Call printToPage when the DOM is ready
+                    console.log("DOM listening for events");
+                });
+            } else {
+                // If the DOM is already loaded, call printToPage immediately
+                console.log("DOM already listening");
+            }
+
+            async function sleep(ms) {
+                return new Promise((resolve) => setTimeout(resolve, ms));
+            }
+        </script>
     </body>
 </html>

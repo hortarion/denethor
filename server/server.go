@@ -5,28 +5,27 @@ import (
 	"log"
 	"net/http"
 	"time"
-
-	internalRegistry "github.com/hortarion/server/internal"
 )
 
 const PORT = "8080"
 
 func main() {
-	m := http.NewServeMux()
+	mux := http.NewServeMux()
 
 	// Replace with brocker logic
-	m.HandleFunc("/", handlePage)
+	mux.HandleFunc("/", handlePage)
+	mux.HandleFunc("/api/handleInput", handleInput)
 
 	// port := os.Getenv("PORT")
 	port := PORT
 	srv := http.Server{
-		Handler:      m,
+		Handler:      mux,
 		Addr:         ":" + port,
 		WriteTimeout: 30 * time.Second,
 		ReadTimeout:  30 * time.Second,
 	}
 
-	internalRegistry.InternalRegistry()
+	// internalRegistry.InternalRegistry()
 
 	// this blocks forever, until the server
 	// has an unrecoverable error
@@ -36,13 +35,33 @@ func main() {
 
 }
 
+// LOCAL DEV ONLY
+// Needs to be removed before going into prod
+func enableCors(w http.ResponseWriter) {
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+}
+
+func handleInput(w http.ResponseWriter, r *http.Request) {
+	enableCors(w)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("hello"))
+}
+
 func handlePage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(200)
 	const page = `<html>
+<style>
+    :root {
+    	--bg-color: #1e1e1e;
+    }
+</style>
 <head></head>
 <body>
-	<p> Server </p>
+	<p> Server OK </p>
 </body>
 </html>
 `

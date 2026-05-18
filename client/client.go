@@ -25,6 +25,9 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.Handle("/", http.RedirectHandler("/public/", http.StatusFound))
+	mux.Handle("/favicon.ico", http.RedirectHandler("/public/favicon.ico", http.StatusFound))
+	mux.Handle("/console.js", http.RedirectHandler("/public/console.js", http.StatusFound))
+
 	mux.Handle("/public/", apiCfg.middlewareMetricsInc(http.StripPrefix("/public", http.FileServer(http.Dir(filePathRoot)))))
 	mux.HandleFunc("/admin/metrics", apiCfg.handlerMetrics)
 
