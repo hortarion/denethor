@@ -1,26 +1,15 @@
 package auth
 
 import (
-	"encoding/json"
-	"fmt"
-	"net/http"
+	"log"
 
 	"github.com/alexedwards/argon2id"
+	"github.com/gorilla/websocket"
 )
 
-func HandleAuth(w http.ResponseWriter, r *http.Request) {
-	type parameters struct {
-		Input string `json:"input"`
-	}
-	decoder := json.NewDecoder(r.Body)
-	params := parameters{}
-	err := decoder.Decode(&params)
-	if err != nil {
-		fmt.Println("Failed to decode json")
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-	fmt.Println("read:", params.Input)
+func HandleAuth(conn *websocket.Conn, message string) ([]byte, error) {
+	log.Println("read:", message)
+	return []byte{}, nil
 }
 
 func HashPassword(password string) (string, error) {

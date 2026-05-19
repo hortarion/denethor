@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/hortarion/server/api"
 	internalRegistry "github.com/hortarion/server/internal/apps"
 	"github.com/hortarion/server/internal/auth"
 	"github.com/joho/godotenv"
@@ -33,18 +33,53 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
+	connID := uuid.New().String()
+	log.Printf("New WebSocket connection: %s from %s", connID, conn.RemoteAddr())
+
 	for {
 		messageType, message, err := conn.ReadMessage()
 		if err != nil {
-			log.Println("Read error:", err)
+			log.Printf("[%s] read error: %v", connID, err)
 			break
 		}
-		log.Printf("Received: %s", message)
-		if err := conn.WriteMessage(messageType, message); err != nil {
-			log.Println("Write error:", err)
+
+		type parameters struct {
+			Token string `json:"token"`
+			Data  string `json:"data"`
+		}
+		params := parameters{}
+		err = json.Unmarshal(message, &params)
+		if err != nil {
+			log.Printf("[%s] Failed to unmarshal JSON: %v", connID, err)
+			continue
+		}
+		log.Printf("DEBUG[%s] sent: %v", connID, params)
+		var response []byte
+		// Handler logic here
+		switch params.Token {
+		case "sys":
+			log.Printf("System received: %s", message)
+		case "console":
+			response, err = handleConsole(conn, params.Data)
+			if err != nil {
+				log.Printf("[%s] Console: %v", connID, err)
+				continue
+			}
+		case "auth":
+			_, err = auth.HandleAuth(conn, params.Data)
+			if err != nil {
+				log.Printf("[%s] Auth: %v", connID, err)
+				continue
+			}
+		default:
+			response = []byte{}
+		}
+		if err := conn.WriteMessage(messageType, response); err != nil {
+			log.Printf("[%s] Write error: %v", connID, err)
 			break
 		}
 	}
+	log.Printf("Connection %s closed", connID)
 }
 
 func main() {
@@ -76,9 +111,7 @@ func main() {
 
 	// Might replace with brocker logic
 	mux.HandleFunc("/ws", handleConnection)
-	mux.HandleFunc("/", handleStatusPage)
-	mux.HandleFunc("/api/console", api.MiddlewareCORS(handleConsole))
-	mux.HandleFunc("/api/auth", api.MiddlewareCORS(auth.HandleAuth))
+	mux.HandleFunc("/status", handleStatusPage)
 
 	// port := os.Getenv("PORT")
 	srv := http.Server{
@@ -98,50 +131,33 @@ func main() {
 
 }
 
-func handleConsole(w http.ResponseWriter, r *http.Request) {
-	type parameters struct {
-		Input string `json:"input"`
-	}
-	decoder := json.NewDecoder(r.Body)
-	params := parameters{}
-	err := decoder.Decode(&params)
-	if err != nil {
-		fmt.Println("Failed to decode json")
-		return
-	}
-	cmd := strings.ToLower(strings.Split(params.Input, " ")[0])
-	args := strings.Split(params.Input, " ")[1:]
-	fmt.Println("cmd:", cmd)
+func handleConsole(conn *websocket.Conn, message string) ([]byte, error) {
+	cmd := strings.ToLower(strings.Split(message, " ")[0])
+	args := strings.Split(message, " ")[1:]
+	log.Println("DEV cmd:", cmd)
 	for idx, arg := range args {
-		fmt.Println(idx+1, ":", arg)
+		log.Println("DEV", idx+1, ":", arg)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if cmd == "clear" {
-		w.Write([]byte("clear"))
-		return
-	}
-	if cmd == "help" {
-		helpMessage := `Available commands:
+	var response []byte
+	switch cmd {
+	case "clear":
+		response = []byte("clear")
+	case "help":
+		response = []byte(`Available commands:
 clear - clear window
 register <username> - sign up
-login <username> - login`
-		w.Write([]byte(helpMessage))
-		return
+login <username> - login`)
+	case "register":
+		response = []byte("maskedInput")
+	case "login":
+		response = []byte("not yet implemented")
+	case "ping":
+		response = []byte("pong")
+	default:
+		return nil, nil
 	}
-	if cmd == "register" {
-		w.Write([]byte("maskedInput"))
-		return
-	}
-	if cmd == "login" {
-		w.Write([]byte("not yet implemented"))
-		return
-	}
-	if cmd == "ping" {
-		w.Write([]byte("pong"))
-		return
-	}
+	return response, nil
 }
 
 func handleStatusPage(w http.ResponseWriter, r *http.Request) {

@@ -96,11 +96,16 @@
 
             socket.onopen = () => {
                 console.log("Connected to backend server");
-                socket.send("Hello, Backend");
+                const message = {
+                    token: "sys",
+                    data: "Client connected",
+                };
+                socket.send(JSON.stringify(message));
             };
 
             socket.onmessage = (event) => {
                 console.log("Message from server:", event.data);
+                handleInputUpdate(event.data);
             };
 
             socket.onclose = () => {
@@ -129,7 +134,11 @@
                     for (i = 0; i < text.length; i++) {
                         maskedText += "*";
                     }
-                    backendAPI(text, "api/auth", "POST");
+                    const message = {
+                        token: "auth",
+                        data: text,
+                    };
+                    socket.send(JSON.stringify(message));
                     text = ">> " + maskedText;
                 }
                 outputLines.push(text);
@@ -175,48 +184,24 @@
             async function handleOutputUpdate() {
                 const lastLine = outputLines[outputLines.length - 1];
                 if (lastLine.startsWith(">>")) {
-                    const reply = await backendAPI(lastLine);
-                    if (reply !== undefined) {
-                        printToPage(reply);
-                    }
+                    const text = lastLine.split(">> ")[1];
+                    const message = {
+                        token: "console",
+                        data: text,
+                    };
+                    socket.send(JSON.stringify(message));
                 }
             }
 
-            // API call to backend
-            async function backendAPI(
-                command,
-                path = "api/console",
-                method = "POST",
-            ) {
-                try {
-                    var input = command.split(">> ")[1];
-                    const response = await fetch(
-                        `http://localhost:8080/` + path,
-                        {
-                            method: method,
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ input }),
-                        },
-                    );
-                    var reply = await response.text();
-                    if (reply == "clear") {
-                        window.clearOutput();
-                        return;
-                    }
-                    if (reply == "maskedInput") {
-                        if (maskedInput) {
-                            maskedInput = false;
-                        } else {
-                            maskedInput = true;
-                        }
-                        return;
-                    }
-                    if (reply.length > 0) {
-                        return reply;
-                    }
-                } catch (err) {
-                    console.log(`Could not reach server: ${err}`);
+            function handleInputUpdate(message) {
+                if (message.length == 0) {
+                    return;
                 }
+                if (message === "maskedInput") {
+                    maskedInput = true;
+                    return;
+                }
+                printToPage(message);
             }
 
             // Event listener
