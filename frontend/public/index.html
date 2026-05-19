@@ -129,7 +129,6 @@
 
             function appendToOutput(text) {
                 if (maskedInput) {
-                    maskedInput = false;
                     var maskedText = "";
                     for (i = 0; i < text.length; i++) {
                         maskedText += "*";
@@ -140,6 +139,7 @@
                     };
                     socket.send(JSON.stringify(message));
                     text = ">> " + maskedText;
+                    maskedInput = false;
                 }
                 outputLines.push(text);
                 if (outputLines.length > MAX_LINES) {
@@ -194,11 +194,17 @@
             }
 
             function handleInputUpdate(message) {
+                if (inputField.type === "password") {
+                    inputField.type = "text";
+                    inputField.placeholder = "Enter text here";
+                }
                 if (message.length == 0) {
                     return;
                 }
                 if (message === "maskedInput") {
                     maskedInput = true;
+                    inputField.type = "password";
+                    inputField.placeholder = "Enter password here";
                     return;
                 }
                 printToPage(message);
