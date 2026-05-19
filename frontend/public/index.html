@@ -92,6 +92,21 @@
         <button id="themeToggle">Toggle Light/Dark</button>
 
         <script>
+            const socket = new WebSocket("ws://localhost:8080/ws");
+
+            socket.onopen = () => {
+                console.log("Connected to backend server");
+                socket.send("Hello, Backend");
+            };
+
+            socket.onmessage = (event) => {
+                console.log("Message from server:", event.data);
+            };
+
+            socket.onclose = () => {
+                console.log("Disconnected from backend server");
+            };
+
             const output = document.getElementById("output");
             const inputField = document.getElementById("inputField");
             const submitButton = document.getElementById("submitButton");
