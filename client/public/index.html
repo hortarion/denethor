@@ -97,13 +97,28 @@
             const submitButton = document.getElementById("submitButton");
             const themeToggle = document.getElementById("themeToggle");
             const body = document.body;
+            const MAX_LINES = 50;
+
+            let outputLines = [];
+
+            function updateOutputLDisplay() {
+                output.textContent = outputLines.join("\n");
+                output.scrollTop = output.scrollHeight;
+            }
+
+            function appendToOutput(text) {
+                outputLines.push(text);
+                if (outputLines.length > MAX_LINES) {
+                    outputLines = outputLines.slice(-MAX_LINES);
+                }
+                updateOutputLDisplay();
+            }
 
             submitButton.addEventListener("click", () => {
                 const inputText = inputField.value;
                 if (inputText.trim() !== "") {
-                    output.textContent += ">> " + inputText + "\n";
+                    appendToOutput(">> " + inputText);
                     inputField.value = "";
-                    output.scrollTop = output.scrollHeight;
                 }
                 output.dispatchEvent(new Event("outputUpdated"));
             });
@@ -119,9 +134,13 @@
             });
 
             window.printToOutput = function (text) {
-                output.textContent += "<< " + text + "\n";
-                output.scrollTop = output.scrollHeight;
+                appendToOutput("<< " + text);
                 output.dispatchEvent(new Event("outputUpdated"));
+            };
+
+            window.clearOutput = function () {
+                outputLines = [];
+                updateOutputLDisplay();
             };
 
             function printToPage(text) {
@@ -129,17 +148,13 @@
             }
 
             async function handleOutputUpdate() {
-                const lines = output.textContent.trim().split("\n");
-                const lastLine = lines[lines.length - 1].trim();
-                const input = lastLine.split(" ")[1];
-
+                const lastLine = outputLines[outputLines.length - 1];
                 // API call to backend
                 if (lastLine.startsWith(">>")) {
-                    // console.log(input); //DEBUG log
                     try {
-                        console.log("API call sent");
+                        var input = lastLine.split(">> ")[1];
                         const response = await fetch(
-                            `http://localhost:8080/api/handleInput`,
+                            `http://localhost:8080/api/console`,
                             {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
@@ -147,6 +162,10 @@
                             },
                         );
                         const reply = await response.text();
+                        if (reply == "clear") {
+                            window.clearOutput();
+                            return;
+                        }
                         if (reply.length > 0) {
                             printToPage(reply);
                         }

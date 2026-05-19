@@ -19,7 +19,6 @@ func returnContent() []string {
 func InternalRegistry() {
 	registerContent("rockPaperScissors")
 	registerContent("notImplemented")
-	registerContent("nakedWrestling")
 	content := returnContent()
 	fmt.Println("Registered applications:")
 	for _, item := range content {

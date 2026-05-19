@@ -1,31 +1,60 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strconv"
+	"strings"
 	"time"
+
+	"github.com/hortarion/server/api"
+	internalRegistry "github.com/hortarion/server/internal/apps"
+	"github.com/joho/godotenv"
 )
 
-const PORT = "8080"
-
 func main() {
+
+	type serverConfig struct {
+		Port string
+		DB   string
+	}
+
+	godotenv.Load()
+	port := os.Getenv("PORT")
+	if port == "" {
+		log.Fatal("PORT must be set")
+	}
+	if _, err := strconv.Atoi(port); err != nil {
+		log.Fatal("PORT must be a valid number")
+	}
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		log.Fatal("DB_URL must be set")
+	}
+
+	cfg := serverConfig{
+		Port: port,
+		DB:   dbURL,
+	}
+
 	mux := http.NewServeMux()
 
-	// Replace with brocker logic
-	mux.HandleFunc("/", handlePage)
-	mux.HandleFunc("/api/handleInput", handleInput)
+	// Might replace with brocker logic
+	mux.HandleFunc("/", handleStatusPage)
+	mux.HandleFunc("/api/console", api.MiddlewareCORS(handleInput))
 
 	// port := os.Getenv("PORT")
-	port := PORT
 	srv := http.Server{
 		Handler:      mux,
-		Addr:         ":" + port,
+		Addr:         ":" + cfg.Port,
 		WriteTimeout: 30 * time.Second,
 		ReadTimeout:  30 * time.Second,
 	}
 
-	// internalRegistry.InternalRegistry()
+	internalRegistry.InternalRegistry()
 
 	// this blocks forever, until the server
 	// has an unrecoverable error
@@ -35,22 +64,38 @@ func main() {
 
 }
 
-// LOCAL DEV ONLY
-// Needs to be removed before going into prod
-func enableCors(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-}
-
 func handleInput(w http.ResponseWriter, r *http.Request) {
-	enableCors(w)
+	type parameters struct {
+		Input string `json:"input"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	params := parameters{}
+	err := decoder.Decode(&params)
+	if err != nil {
+		fmt.Println("Failed to decode json")
+		return
+	}
+	cmd := strings.ToLower(strings.Split(params.Input, " ")[0])
+	args := strings.Split(params.Input, " ")[1:]
+	fmt.Println("cmd:", cmd)
+	for idx, arg := range args {
+		fmt.Println(idx+1, ":", arg)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
+	if cmd == "clear" {
+		w.Write([]byte("clear"))
+		return
+	}
+	if cmd == "help" {
+		w.Write([]byte("Available commands:\nclear - clear window"))
+		return
+	}
 	w.Write([]byte("hello"))
 }
 
-func handlePage(w http.ResponseWriter, r *http.Request) {
+func handleStatusPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
 	const page = `<html>
@@ -66,7 +111,7 @@ func handlePage(w http.ResponseWriter, r *http.Request) {
 </style>
 <head></head>
 <body>
-	<p> Server OK </p>
+	<p> Server Status OK </p>
 </body>
 </html>
 `
