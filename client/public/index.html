@@ -100,6 +100,7 @@
             const MAX_LINES = 50;
 
             let outputLines = [];
+            let maskedInput = false;
 
             function updateOutputLDisplay() {
                 output.textContent = outputLines.join("\n");
@@ -107,6 +108,15 @@
             }
 
             function appendToOutput(text) {
+                if (maskedInput) {
+                    maskedInput = false;
+                    var maskedText = "";
+                    for (i = 0; i < text.length; i++) {
+                        maskedText += "*";
+                    }
+                    backendAPI(text, "api/auth", "POST");
+                    text = ">> " + maskedText;
+                }
                 outputLines.push(text);
                 if (outputLines.length > MAX_LINES) {
                     outputLines = outputLines.slice(-MAX_LINES);
@@ -149,29 +159,48 @@
 
             async function handleOutputUpdate() {
                 const lastLine = outputLines[outputLines.length - 1];
-                // API call to backend
                 if (lastLine.startsWith(">>")) {
-                    try {
-                        var input = lastLine.split(">> ")[1];
-                        const response = await fetch(
-                            `http://localhost:8080/api/console`,
-                            {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ input }),
-                            },
-                        );
-                        const reply = await response.text();
-                        if (reply == "clear") {
-                            window.clearOutput();
-                            return;
-                        }
-                        if (reply.length > 0) {
-                            printToPage(reply);
-                        }
-                    } catch (err) {
-                        console.log(`Could not reach server: ${err}`);
+                    const reply = await backendAPI(lastLine);
+                    if (reply !== undefined) {
+                        printToPage(reply);
                     }
+                }
+            }
+
+            // API call to backend
+            async function backendAPI(
+                command,
+                path = "api/console",
+                method = "POST",
+            ) {
+                try {
+                    var input = command.split(">> ")[1];
+                    const response = await fetch(
+                        `http://localhost:8080/` + path,
+                        {
+                            method: method,
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ input }),
+                        },
+                    );
+                    var reply = await response.text();
+                    if (reply == "clear") {
+                        window.clearOutput();
+                        return;
+                    }
+                    if (reply == "maskedInput") {
+                        if (maskedInput) {
+                            maskedInput = false;
+                        } else {
+                            maskedInput = true;
+                        }
+                        return;
+                    }
+                    if (reply.length > 0) {
+                        return reply;
+                    }
+                } catch (err) {
+                    console.log(`Could not reach server: ${err}`);
                 }
             }
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/hortarion/server/api"
 	internalRegistry "github.com/hortarion/server/internal/apps"
+	"github.com/hortarion/server/internal/auth"
 	"github.com/joho/godotenv"
 )
 
@@ -44,7 +45,8 @@ func main() {
 
 	// Might replace with brocker logic
 	mux.HandleFunc("/", handleStatusPage)
-	mux.HandleFunc("/api/console", api.MiddlewareCORS(handleInput))
+	mux.HandleFunc("/api/console", api.MiddlewareCORS(handleConsole))
+	mux.HandleFunc("/api/auth", api.MiddlewareCORS(auth.HandleAuth))
 
 	// port := os.Getenv("PORT")
 	srv := http.Server{
@@ -64,7 +66,7 @@ func main() {
 
 }
 
-func handleInput(w http.ResponseWriter, r *http.Request) {
+func handleConsole(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Input string `json:"input"`
 	}
@@ -89,10 +91,25 @@ func handleInput(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if cmd == "help" {
-		w.Write([]byte("Available commands:\nclear - clear window"))
+		helpMessage := `Available commands:
+clear - clear window
+register <username> - sign up
+login <username> - login`
+		w.Write([]byte(helpMessage))
 		return
 	}
-	w.Write([]byte("hello"))
+	if cmd == "register" {
+		w.Write([]byte("maskedInput"))
+		return
+	}
+	if cmd == "login" {
+		w.Write([]byte("not yet implemented"))
+		return
+	}
+	if cmd == "ping" {
+		w.Write([]byte("pong"))
+		return
+	}
 }
 
 func handleStatusPage(w http.ResponseWriter, r *http.Request) {
