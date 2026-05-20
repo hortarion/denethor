@@ -7,12 +7,13 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func HandleAuth(conn *websocket.Conn, message string) (string, error) {
+func HandleAuth(conn *websocket.Conn, authChan chan<- string, message string) (string, error) {
 	log.Println("DEV auth:", message)
 	hash, err := HashPassword(message)
 	if err != nil {
 		return "", err
 	}
+	authChan <- hash
 	log.Println("DEV auth: hash ", hash)
 	match, err := CheckPasswordHash(message, hash)
 	if err != nil {

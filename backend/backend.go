@@ -38,6 +38,10 @@ type websocketMessage struct {
 
 func (cfg ServerConfig) handleConnection(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+
+	authChan := make(chan string, 1)
+	ctx = context.WithValue(ctx, "authChan", authChan)
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Upgrade error:", err)
@@ -48,8 +52,19 @@ func (cfg ServerConfig) handleConnection(w http.ResponseWriter, r *http.Request)
 	connID := uuid.New().String()
 	log.Printf("New WebSocket connection: %s from %s", connID, conn.RemoteAddr())
 
+	outbound := make(chan []byte, 10)
+
+	go func() {
+		for msg := range outbound {
+			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+				log.Printf("[%s] Write error: %v", connID, err)
+				break
+			}
+		}
+	}()
+
 	for {
-		messageType, message, err := conn.ReadMessage()
+		_, message, err := conn.ReadMessage()
 		if err != nil {
 			log.Printf("[%s] read error: %v", connID, err)
 			break
@@ -67,13 +82,13 @@ func (cfg ServerConfig) handleConnection(w http.ResponseWriter, r *http.Request)
 		case "sys":
 			log.Printf("System received: %s", message)
 		case "console":
-			response, err = cfg.handleConsole(ctx, conn, params.Data)
+			response, err = cfg.handleConsole(ctx, conn, params.Data, outbound)
 			if err != nil {
 				log.Printf("[%s] Console: %v", connID, err)
 				continue
 			}
 		case "auth":
-			_, err = auth.HandleAuth(conn, params.Data)
+			_, err = auth.HandleAuth(conn, authChan, params.Data)
 			if err != nil {
 				log.Printf("[%s] Auth: %v", connID, err)
 				continue
@@ -88,10 +103,7 @@ func (cfg ServerConfig) handleConnection(w http.ResponseWriter, r *http.Request)
 			log.Printf("[%s] failed to marshal JSON: %s", connID, err)
 			continue
 		}
-		if err := conn.WriteMessage(messageType, byteResponse); err != nil {
-			log.Printf("[%s] Write error: %v", connID, err)
-			break
-		}
+		outbound <- byteResponse
 	}
 	log.Printf("Connection %s closed", connID)
 }
@@ -158,7 +170,7 @@ func main() {
 
 }
 
-func (cfg ServerConfig) handleConsole(ctx context.Context, conn *websocket.Conn, message string) (websocketMessage, error) {
+func (cfg ServerConfig) handleConsole(ctx context.Context, conn *websocket.Conn, message string, outbound chan<- []byte) (websocketMessage, error) {
 	cmd := strings.ToLower(strings.Split(message, " ")[0])
 	args := strings.Split(message, " ")[1:]
 	log.Println("[DEV] cmd:", cmd)
@@ -193,7 +205,15 @@ login <username> - login`
 			return websocketMessage{}, err
 		}
 		if !exists {
+			authChan, ok := ctx.Value("authChan").(chan string)
+			if !ok {
+				return websocketMessage{}, fmt.Errorf("auth channel not found")
+			}
+			// GO func
+			go cfg.registerUser(ctx, conn, authChan, args[0], outbound)
 			response.Token = "auth"
+			response.Data = "type in your password"
+
 		} else {
 			response.Data = "username already taken"
 		}
@@ -206,6 +226,33 @@ login <username> - login`
 	}
 
 	return response, nil
+}
+
+func (cfg *ServerConfig) registerUser(ctx context.Context, conn *websocket.Conn, authChan <-chan string, username string, outbound chan<- []byte) {
+	password := <-authChan
+	hash, err := auth.HashPassword(password)
+	if err != nil {
+		log.Printf("[REGIST] error: %s", err)
+		return
+	}
+	user, err := cfg.DB.CreateUser(ctx, database.CreateUserParams{
+		Username:       username,
+		HashedPassword: hash,
+	})
+	if err != nil {
+		log.Printf("[REGIST] error: %s", err)
+		return
+	}
+	response := websocketMessage{
+		Token: "console",
+		Data:  fmt.Sprintf("%s has been registered", user.Username),
+	}
+	byteResponse, err := json.Marshal(response)
+	if err != nil {
+		log.Printf("[REGIST] error: %s", err)
+		return
+	}
+	outbound <- byteResponse
 }
 
 func handleStatusPage(w http.ResponseWriter, r *http.Request) {
