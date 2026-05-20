@@ -88,11 +88,8 @@ func (cfg ServerConfig) handleConnection(w http.ResponseWriter, r *http.Request)
 				continue
 			}
 		case "auth":
-			_, err = auth.HandleAuth(conn, authChan, params.Data)
-			if err != nil {
-				log.Printf("[%s] Auth: %v", connID, err)
-				continue
-			}
+			authChan <- params.Data
+
 			response.Token = "auth"
 			response.Data = ""
 		default:
@@ -171,6 +168,7 @@ func main() {
 }
 
 func (cfg ServerConfig) handleConsole(ctx context.Context, conn *websocket.Conn, message string, outbound chan<- []byte) (websocketMessage, error) {
+	authChan, ok := ctx.Value("authChan").(chan string)
 	cmd := strings.ToLower(strings.Split(message, " ")[0])
 	args := strings.Split(message, " ")[1:]
 	log.Println("[DEV] cmd:", cmd)
@@ -205,7 +203,6 @@ login <username> - login`
 			return websocketMessage{}, err
 		}
 		if !exists {
-			authChan, ok := ctx.Value("authChan").(chan string)
 			if !ok {
 				return websocketMessage{}, fmt.Errorf("auth channel not found")
 			}
@@ -218,7 +215,31 @@ login <username> - login`
 			response.Data = "username already taken"
 		}
 	case "login":
-		response.Data = "not yet implemented"
+		if len(args) == 0 {
+			response.Data = "no username provided"
+			return response, nil
+		}
+		if len(args[0]) == 0 {
+			response.Data = "no username provided"
+			return response, nil
+		}
+		exists, err := cfg.DB.CheckUserByName(ctx, args[0])
+		if err != nil {
+			return websocketMessage{}, err
+		}
+		if exists {
+
+			if !ok {
+				return websocketMessage{}, fmt.Errorf("auth channel not found")
+			}
+			// GO func
+			go cfg.loginUser(ctx, conn, authChan, args[0], outbound)
+			response.Token = "auth"
+			response.Data = "type in your password"
+
+		} else {
+			response.Data = "username not registered"
+		}
 	case "ping":
 		response.Data = "pong"
 	default:
@@ -253,6 +274,35 @@ func (cfg *ServerConfig) registerUser(ctx context.Context, conn *websocket.Conn,
 		return
 	}
 	outbound <- byteResponse
+}
+
+func (cfg *ServerConfig) loginUser(ctx context.Context, conn *websocket.Conn, authChan <-chan string, username string, outbound chan<- []byte) {
+	password := <-authChan
+	user, err := cfg.DB.GetUserByUsername(ctx, username)
+	if err != nil {
+		log.Printf("[LOGIN] error: %s", err)
+		return
+	}
+	response := websocketMessage{
+		Token: "auth",
+		Data:  "incorrect password",
+	}
+	valid, err := auth.CheckPasswordHash(password, user.HashedPassword)
+	if err != nil {
+		log.Printf("[LOGIN] error: %s", err)
+	}
+	if valid {
+		response.Token = "auth"
+		response.Data = fmt.Sprintf("logged in as %s", user.Username)
+	}
+
+	byteResponse, err := json.Marshal(response)
+	if err != nil {
+		log.Printf("[LOGIN] error: %s", err)
+		return
+	}
+	outbound <- byteResponse
+
 }
 
 func handleStatusPage(w http.ResponseWriter, r *http.Request) {

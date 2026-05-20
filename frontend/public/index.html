@@ -129,6 +129,7 @@
 
             function appendToOutput(text) {
                 if (maskedInput) {
+                    text = text.split(">> ")[1];
                     var maskedText = "";
                     for (i = 0; i < text.length; i++) {
                         maskedText += "*";
@@ -149,6 +150,9 @@
 
             submitButton.addEventListener("click", () => {
                 const inputText = inputField.value;
+                if (inputText.length === 0) {
+                    return;
+                }
                 if (inputText.trim() !== "") {
                     appendToOutput(">> " + inputText);
                     inputField.value = "";
@@ -195,20 +199,24 @@
 
             function handleInputUpdate(input) {
                 const message = JSON.parse(input);
-                if (message.token === "auth") {
+                if (
+                    message.token === "auth" &&
+                    message.data === "type in your password"
+                ) {
                     if (maskedInput === false) {
                         maskedInput = true;
                         inputField.type = "password";
                         inputField.placeholder = "Enter password here";
                         return;
                     }
-                    if (maskedInput === true) {
-                        maskedInput = false;
-                        inputField.type = "text";
-                        inputField.placeholder = "Enter text here";
-                        return;
-                    }
                 }
+                if (maskedInput === true) {
+                    maskedInput = false;
+                    inputField.type = "text";
+                    inputField.placeholder = "Enter text here";
+                    return;
+                }
+
                 if (message.data.length == 0) {
                     return;
                 }

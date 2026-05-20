@@ -1,27 +1,8 @@
 package auth
 
 import (
-	"log"
-
 	"github.com/alexedwards/argon2id"
-	"github.com/gorilla/websocket"
 )
-
-func HandleAuth(conn *websocket.Conn, authChan chan<- string, message string) (string, error) {
-	log.Println("DEV auth:", message)
-	hash, err := HashPassword(message)
-	if err != nil {
-		return "", err
-	}
-	authChan <- hash
-	log.Println("DEV auth: hash ", hash)
-	match, err := CheckPasswordHash(message, hash)
-	if err != nil {
-		return "", err
-	}
-	log.Println("DEV auth: match ", match)
-	return "", nil
-}
 
 func HashPassword(password string) (string, error) {
 	hash, err := argon2id.CreateHash(password, argon2id.DefaultParams)
