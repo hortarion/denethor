@@ -21,3 +21,6 @@ WHERE id = $1;
 UPDATE users SET deleted_at = NOW()
 WHERE id = $1
 RETURNING *;
+
+-- name: CheckUserByName :one
+SELECT EXISTS(SELECT 1 FROM users WHERE username = $1);

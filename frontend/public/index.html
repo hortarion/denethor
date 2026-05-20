@@ -137,9 +137,8 @@
                         token: "auth",
                         data: text,
                     };
-                    socket.send(JSON.stringify(message));
                     text = ">> " + maskedText;
-                    maskedInput = false;
+                    socket.send(JSON.stringify(message));
                 }
                 outputLines.push(text);
                 if (outputLines.length > MAX_LINES) {
@@ -185,6 +184,7 @@
                 const lastLine = outputLines[outputLines.length - 1];
                 if (lastLine.startsWith(">>")) {
                     const text = lastLine.split(">> ")[1];
+
                     const message = {
                         token: "console",
                         data: text,
@@ -193,26 +193,35 @@
                 }
             }
 
-            function handleInputUpdate(message) {
-                if (inputField.type === "password") {
-                    inputField.type = "text";
-                    inputField.placeholder = "Enter text here";
+            function handleInputUpdate(input) {
+                const message = JSON.parse(input);
+                if (message.token === "auth") {
+                    if (maskedInput === false) {
+                        maskedInput = true;
+                        inputField.type = "password";
+                        inputField.placeholder = "Enter password here";
+                        return;
+                    }
+                    if (maskedInput === true) {
+                        maskedInput = false;
+                        inputField.type = "text";
+                        inputField.placeholder = "Enter text here";
+                        return;
+                    }
                 }
-                if (message.length == 0) {
+                if (message.data.length == 0) {
                     return;
                 }
-                if (message === "maskedInput") {
-                    maskedInput = true;
-                    inputField.type = "password";
-                    inputField.placeholder = "Enter password here";
-                    return;
+                if (message.token === "console") {
+                    if (message.data === "clear") {
+                        clearOutput();
+                    }
                 }
-                printToPage(message);
+                printToPage(message.data);
             }
 
             // Event listener
             output.addEventListener("outputUpdated", async () => {
-                console.log("outputUpdated event fire");
                 await handleOutputUpdate();
             });
 

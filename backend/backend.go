@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -10,10 +12,14 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/lib/pq"
+
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	internalRegistry "github.com/hortarion/server/internal/apps"
 	"github.com/hortarion/server/internal/auth"
+	"github.com/hortarion/server/internal/database"
+
 	"github.com/joho/godotenv"
 )
 
@@ -25,7 +31,13 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func handleConnection(w http.ResponseWriter, r *http.Request) {
+type websocketMessage struct {
+	Token string `json:"token"`
+	Data  string `json:"data"`
+}
+
+func (cfg ServerConfig) handleConnection(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Upgrade error:", err)
@@ -43,24 +55,19 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 
-		type parameters struct {
-			Token string `json:"token"`
-			Data  string `json:"data"`
-		}
-		params := parameters{}
+		params := websocketMessage{}
 		err = json.Unmarshal(message, &params)
 		if err != nil {
 			log.Printf("[%s] Failed to unmarshal JSON: %v", connID, err)
 			continue
 		}
-		log.Printf("DEBUG[%s] sent: %v", connID, params)
-		var response []byte
+		var response websocketMessage
 		// Handler logic here
 		switch params.Token {
 		case "sys":
 			log.Printf("System received: %s", message)
 		case "console":
-			response, err = handleConsole(conn, params.Data)
+			response, err = cfg.handleConsole(ctx, conn, params.Data)
 			if err != nil {
 				log.Printf("[%s] Console: %v", connID, err)
 				continue
@@ -71,10 +78,17 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 				log.Printf("[%s] Auth: %v", connID, err)
 				continue
 			}
+			response.Token = "auth"
+			response.Data = ""
 		default:
-			response = []byte{}
+			response = websocketMessage{}
 		}
-		if err := conn.WriteMessage(messageType, response); err != nil {
+		byteResponse, err := json.Marshal(response)
+		if err != nil {
+			log.Printf("[%s] failed to marshal JSON: %s", connID, err)
+			continue
+		}
+		if err := conn.WriteMessage(messageType, byteResponse); err != nil {
 			log.Printf("[%s] Write error: %v", connID, err)
 			break
 		}
@@ -82,14 +96,19 @@ func handleConnection(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Connection %s closed", connID)
 }
 
+type ServerConfig struct {
+	Port     string
+	DB       *database.Queries
+	Platform string
+}
+
 func main() {
 
-	type serverConfig struct {
-		Port string
-		DB   string
-	}
-
 	godotenv.Load()
+	platform := os.Getenv("PLATFORM")
+	if platform == "" {
+		log.Fatal("PLATFORM must be set")
+	}
 	port := os.Getenv("PORT")
 	if port == "" {
 		log.Fatal("PORT must be set")
@@ -102,16 +121,24 @@ func main() {
 		log.Fatal("DB_URL must be set")
 	}
 
-	cfg := serverConfig{
-		Port: port,
-		DB:   dbURL,
+	dbConn, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatalf("Error opening database: %s", err)
+	}
+	dbQueries := database.New(dbConn)
+
+	cfg := ServerConfig{
+		Port:     port,
+		DB:       dbQueries,
+		Platform: platform,
 	}
 
 	mux := http.NewServeMux()
 
 	// Might replace with brocker logic
-	mux.HandleFunc("/ws", handleConnection)
+	mux.HandleFunc("/ws", cfg.handleConnection)
 	mux.HandleFunc("/status", handleStatusPage)
+	mux.HandleFunc("POST /admin/reset", cfg.handleReset)
 
 	// port := os.Getenv("PORT")
 	srv := http.Server{
@@ -126,37 +153,58 @@ func main() {
 	// this blocks forever, until the server
 	// has an unrecoverable error
 	fmt.Printf("server started on http://localhost:%s\n", port)
-	err := srv.ListenAndServe()
-	log.Fatal(err)
+	serverErr := srv.ListenAndServe()
+	log.Fatal(serverErr)
 
 }
 
-func handleConsole(conn *websocket.Conn, message string) ([]byte, error) {
+func (cfg ServerConfig) handleConsole(ctx context.Context, conn *websocket.Conn, message string) (websocketMessage, error) {
 	cmd := strings.ToLower(strings.Split(message, " ")[0])
 	args := strings.Split(message, " ")[1:]
-	log.Println("DEV cmd:", cmd)
+	log.Println("[DEV] cmd:", cmd)
 	for idx, arg := range args {
-		log.Println("DEV", idx+1, ":", arg)
+		log.Println("[DEV]", idx+1, ":", arg)
 	}
 
-	var response []byte
+	response := websocketMessage{
+		Token: "console",
+		Data:  "",
+	}
+
 	switch cmd {
 	case "clear":
-		response = []byte("clear")
+		response.Data = "clear"
 	case "help":
-		response = []byte(`Available commands:
+		response.Data = `Available commands:
 clear - clear window
 register <username> - sign up
-login <username> - login`)
+login <username> - login`
 	case "register":
-		response = []byte("maskedInput")
+		if len(args) == 0 {
+			response.Data = "no username provided"
+			return response, nil
+		}
+		if len(args[0]) == 0 {
+			response.Data = "no username provided"
+			return response, nil
+		}
+		exists, err := cfg.DB.CheckUserByName(ctx, args[0])
+		if err != nil {
+			return websocketMessage{}, err
+		}
+		if !exists {
+			response.Token = "auth"
+		} else {
+			response.Data = "username already taken"
+		}
 	case "login":
-		response = []byte("not yet implemented")
+		response.Data = "not yet implemented"
 	case "ping":
-		response = []byte("pong")
+		response.Data = "pong"
 	default:
-		return nil, nil
+		return websocketMessage{}, nil
 	}
+
 	return response, nil
 }
 
@@ -181,4 +229,20 @@ func handleStatusPage(w http.ResponseWriter, r *http.Request) {
 </html>
 `
 	w.Write([]byte(page))
+}
+
+func (cfg *ServerConfig) handleReset(w http.ResponseWriter, r *http.Request) {
+	if cfg.Platform != "dev" {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte("Reset is only allowed in dev environment."))
+		return
+	}
+	err := cfg.DB.ResetDB(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Failed to reset the database: " + err.Error()))
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Database has been reset."))
 }
