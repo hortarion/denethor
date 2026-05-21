@@ -185,6 +185,7 @@ func (cfg ServerConfig) handleConsole(ctx context.Context, conn *websocket.Conn,
 
 	switch cmd {
 	case "clear":
+		response.Token = "sys"
 		response.Data = "clear"
 	case "help":
 		response.Data = `Available commands:
@@ -209,7 +210,7 @@ login <username> - login`
 				return websocketMessage{}, fmt.Errorf("auth channel not found")
 			}
 			// GO func
-			go cfg.registerUser(ctx, conn, authChan, args[0], outbound)
+			go cfg.registerUser(ctx, authChan, args[0], outbound)
 			response.Token = "auth"
 			response.Data = "type in your password"
 
@@ -235,7 +236,7 @@ login <username> - login`
 				return websocketMessage{}, fmt.Errorf("auth channel not found")
 			}
 			// GO func
-			go cfg.loginUser(ctx, conn, authChan, args[0], outbound)
+			go cfg.loginUser(ctx, authChan, args[0], outbound)
 			response.Token = "auth"
 			response.Data = "type in your password"
 
@@ -251,7 +252,7 @@ login <username> - login`
 	return response, nil
 }
 
-func (cfg *ServerConfig) registerUser(ctx context.Context, conn *websocket.Conn, authChan <-chan string, username string, outbound chan<- []byte) {
+func (cfg *ServerConfig) registerUser(ctx context.Context, authChan <-chan string, username string, outbound chan<- []byte) {
 	password := <-authChan
 	hash, err := auth.HashPassword(password)
 	if err != nil {
@@ -278,7 +279,7 @@ func (cfg *ServerConfig) registerUser(ctx context.Context, conn *websocket.Conn,
 	outbound <- byteResponse
 }
 
-func (cfg *ServerConfig) loginUser(ctx context.Context, conn *websocket.Conn, authChan <-chan string, username string, outbound chan<- []byte) {
+func (cfg *ServerConfig) loginUser(ctx context.Context, authChan <-chan string, username string, outbound chan<- []byte) {
 	password := <-authChan
 	user, err := cfg.DB.GetUserByUsername(ctx, username)
 	if err != nil {

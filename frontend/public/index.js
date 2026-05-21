@@ -34,18 +34,19 @@ function updateOutputLDisplay() {
   output.scrollTop = output.scrollHeight;
 }
 
+// TODO: double check match logic
 function appendToOutput(text) {
   if (maskedInput) {
-    text = text.split(">> ")[1];
-    var maskedText = "";
-    for (i = 0; i < text.length; i++) {
-      maskedText += "*";
-    }
+    const now = new Date();
+    const timestamp = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
+    const match = text.match(/\[.*?\] You: (.*)/);
+    const command = match ? match[1] : text;
+    var maskedText = "*".repeat(command.length);
     const message = {
       token: "auth",
-      data: text,
+      data: command,
     };
-    text = ">> " + maskedText;
+    text = `[${timestamp}] You: ${maskedText}`;
     socket.send(JSON.stringify(message));
   }
   outputLines.push(text);
@@ -61,7 +62,9 @@ submitButton.addEventListener("click", () => {
     return;
   }
   if (inputText.trim() !== "") {
-    appendToOutput(">> " + inputText);
+    const now = new Date();
+    const timestamp = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
+    appendToOutput(`[${timestamp}] You: ` + inputText);
     inputField.value = "";
   }
   output.dispatchEvent(new Event("outputUpdated"));
@@ -78,7 +81,9 @@ themeToggle.addEventListener("click", () => {
 });
 
 window.printToOutput = function (text) {
-  appendToOutput("<< " + text);
+  const now = new Date();
+  const timestamp = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
+  appendToOutput(`[${timestamp}] Denethor:\n` + text);
   output.dispatchEvent(new Event("outputUpdated"));
 };
 
@@ -93,12 +98,14 @@ function printToPage(text) {
 
 async function handleOutputUpdate() {
   const lastLine = outputLines[outputLines.length - 1];
-  if (lastLine.startsWith(">>")) {
-    const text = lastLine.split(">> ")[1];
+  const regex = /\[.*?\] You: /;
+  if (regex.test(lastLine)) {
+    const text = [];
+    const commands = lastLine.split(/\[.*?\] You: /)[1];
 
     const message = {
       token: "console",
-      data: text,
+      data: commands,
     };
     socket.send(JSON.stringify(message));
   }
@@ -124,9 +131,10 @@ function handleInputUpdate(input) {
   if (message.data.length == 0) {
     return;
   }
-  if (message.token === "console") {
+  if (message.token === "sys") {
     if (message.data === "clear") {
       clearOutput();
+      return;
     }
   }
   printToPage(message.data);
