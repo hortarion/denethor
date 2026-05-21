@@ -169,6 +169,7 @@ func main() {
 
 }
 
+// TODO: refactor commands and create commandRegistry
 func (cfg ServerConfig) handleConsole(ctx context.Context, conn *websocket.Conn, message string, outbound chan<- []byte) (websocketMessage, error) {
 	authChan, ok := ctx.Value("authChan").(chan string)
 	cmd := strings.ToLower(strings.Split(message, " ")[0])

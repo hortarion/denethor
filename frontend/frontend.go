@@ -56,7 +56,6 @@ func main() {
 		ReadTimeout:  30 * time.Second,
 	}
 
-	// Listen until an unrecoverable error occurs
 	fmt.Printf("server started on http://localhost:%s\n", port)
 	err := srv.ListenAndServe()
 	log.Fatal(err)

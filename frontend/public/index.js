@@ -1,3 +1,4 @@
+// TODO: Reorder more logically
 const socket = new WebSocket(`ws://${window.location.hostname}:8080/ws`);
 
 socket.onopen = () => {
