@@ -23,11 +23,12 @@ import (
 	"github.com/joho/godotenv"
 )
 
+// TODO: load URL and frontend port fron .env
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true
+		return r.Header.Get("Origin") == "http://localhost:8090"
 	},
 }
 
@@ -114,6 +115,7 @@ type ServerConfig struct {
 func main() {
 
 	godotenv.Load()
+
 	platform := os.Getenv("PLATFORM")
 	if platform == "" {
 		log.Fatal("PLATFORM must be set")

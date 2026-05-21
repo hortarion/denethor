@@ -4,23 +4,41 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sync/atomic"
 	"time"
+
+	"github.com/joho/godotenv"
 )
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
 	platform       string
+	port           string
+	filePathRoot   string
 }
-
-const PORT = "8090"
-const filePathRoot = "public"
 
 func main() {
 
+	godotenv.Load()
+	port := os.Getenv("PORT")
+	if port == "" {
+		log.Fatal("PORT must be set")
+	}
+	platform := os.Getenv("PLATFORM")
+	if platform == "" {
+		log.Fatal("PLATFORM must be set")
+	}
+	filePathRoot := os.Getenv("FILE_PATH_ROOT")
+	if filePathRoot == "" {
+		log.Fatal("FILE_PATH_ROOT must be set")
+	}
+
 	apiCfg := apiConfig{
 		fileserverHits: atomic.Int32{},
-		platform:       "dev",
+		platform:       platform,
+		port:           port,
+		filePathRoot:   filePathRoot,
 	}
 
 	mux := http.NewServeMux()
@@ -31,11 +49,9 @@ func main() {
 	// APIs
 	mux.HandleFunc("/admin/metrics", apiCfg.handlerMetrics)
 
-	// port := os.Getenv("PORT")
-	port := PORT
 	srv := http.Server{
 		Handler:      mux,
-		Addr:         ":" + port,
+		Addr:         ":" + apiCfg.port,
 		WriteTimeout: 30 * time.Second,
 		ReadTimeout:  30 * time.Second,
 	}
@@ -50,7 +66,7 @@ func main() {
 func (apiCfg *apiConfig) handlerMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "text/html")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf(`<html>
+	w.Write([]byte(fmt.Appendf(nil, `<html>
 	<style>
     	:root {
     	--bg-color: #1e1e1e;
