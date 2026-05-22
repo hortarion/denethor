@@ -1,10 +1,10 @@
-// TODO: Reorder more logically
 const socket = new WebSocket(`ws://${window.location.hostname}:8080/ws`);
 
 socket.onopen = () => {
   console.log("Connected to backend server");
   const message = {
-    token: "sys",
+    channel: "sys",
+    token: "",
     data: "Client connected",
   };
   socket.send(JSON.stringify(message));
@@ -29,33 +29,6 @@ const MAX_LINES = 50;
 
 let outputLines = [];
 let maskedInput = false;
-
-function updateOutputLDisplay() {
-  output.textContent = outputLines.join("\n");
-  output.scrollTop = output.scrollHeight;
-}
-
-// TODO: double check match logic
-function appendToOutput(text) {
-  if (maskedInput) {
-    const now = new Date();
-    const timestamp = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
-    const match = text.match(/\[.*?\] You: (.*)/);
-    const command = match ? match[1] : text;
-    var maskedText = "*".repeat(command.length);
-    const message = {
-      token: "auth",
-      data: command,
-    };
-    text = `[${timestamp}] You: ${maskedText}`;
-    socket.send(JSON.stringify(message));
-  }
-  outputLines.push(text);
-  if (outputLines.length > MAX_LINES) {
-    outputLines = outputLines.slice(-MAX_LINES);
-  }
-  updateOutputLDisplay();
-}
 
 submitButton.addEventListener("click", () => {
   const inputText = inputField.value;
@@ -93,8 +66,35 @@ window.clearOutput = function () {
   updateOutputLDisplay();
 };
 
+function updateOutputLDisplay() {
+  output.textContent = outputLines.join("\n");
+  output.scrollTop = output.scrollHeight;
+}
+
 function printToPage(text) {
   window.printToOutput(text);
+}
+
+function appendToOutput(text) {
+  if (maskedInput) {
+    const now = new Date();
+    const timestamp = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
+    const match = text.match(/\[.*?\] You: (.*)/);
+    const command = match ? match[1] : text;
+    var maskedText = "*".repeat(command.length);
+    const message = {
+      channel: "auth",
+      token: "",
+      data: command,
+    };
+    text = `[${timestamp}] You: ${maskedText}`;
+    socket.send(JSON.stringify(message));
+  }
+  outputLines.push(text);
+  if (outputLines.length > MAX_LINES) {
+    outputLines = outputLines.slice(-MAX_LINES);
+  }
+  updateOutputLDisplay();
 }
 
 async function handleOutputUpdate() {
@@ -105,7 +105,8 @@ async function handleOutputUpdate() {
     const commands = lastLine.split(/\[.*?\] You: /)[1];
 
     const message = {
-      token: "console",
+      channel: "console",
+      token: "",
       data: commands,
     };
     socket.send(JSON.stringify(message));
@@ -114,7 +115,7 @@ async function handleOutputUpdate() {
 
 function handleInputUpdate(input) {
   const message = JSON.parse(input);
-  if (message.token === "auth" && message.data === "type in your password") {
+  if (message.channel === "auth" && message.data === "type in your password") {
     if (maskedInput === false) {
       maskedInput = true;
       inputField.type = "password";
@@ -132,7 +133,7 @@ function handleInputUpdate(input) {
   if (message.data.length == 0) {
     return;
   }
-  if (message.token === "sys") {
+  if (message.channel === "sys") {
     if (message.data === "clear") {
       clearOutput();
       return;
@@ -141,19 +142,15 @@ function handleInputUpdate(input) {
   printToPage(message.data);
 }
 
-// Event listener
 output.addEventListener("outputUpdated", async () => {
   await handleOutputUpdate();
 });
 
-// Ensure the DOM is fully loaded before attaching listeners
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
-    // Call printToPage when the DOM is ready
     console.log("DOM listening for events");
   });
 } else {
-  // If the DOM is already loaded, call printToPage immediately
   console.log("DOM already listening");
 }
 

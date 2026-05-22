@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -16,25 +17,93 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	internalRegistry "github.com/hortarion/server/internal/apps"
 	"github.com/hortarion/server/internal/auth"
 	"github.com/hortarion/server/internal/database"
 
 	"github.com/joho/godotenv"
 )
 
-// TODO: load URL and frontend port fron .env
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return r.Header.Get("Origin") == "http://localhost:8090"
-	},
+type ServerConfig struct {
+	Port           string
+	DB             *database.Queries
+	Platform       string
+	AllowedOrigins []string
+	Upgrader       websocket.Upgrader
 }
 
+// TODO: Whitelist frontend
+
 type websocketMessage struct {
-	Token string `json:"token"`
-	Data  string `json:"data"`
+	Channel string `json:"channel"`
+	Token   string `json:"token"`
+	Data    string `json:"data"`
+}
+
+func main() {
+
+	godotenv.Load()
+
+	platform := os.Getenv("PLATFORM")
+	if platform == "" {
+		log.Fatal("PLATFORM must be set")
+	}
+	port := os.Getenv("PORT")
+	if port == "" {
+		log.Fatal("PORT must be set")
+	}
+	if _, err := strconv.Atoi(port); err != nil {
+		log.Fatal("PORT must be a valid number")
+	}
+	dbURL := os.Getenv("DB_URL")
+	if dbURL == "" {
+		log.Fatal("DB_URL must be set")
+	}
+
+	dbConn, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatalf("Error opening database: %s", err)
+	}
+	dbQueries := database.New(dbConn)
+
+	cfg := ServerConfig{
+		Port:           port,
+		DB:             dbQueries,
+		Platform:       platform,
+		AllowedOrigins: []string{"http://localhost:8090"},
+	}
+
+	var upgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			return slices.Contains(cfg.AllowedOrigins, origin)
+		},
+	}
+
+	cfg.Upgrader = upgrader
+
+	mux := http.NewServeMux()
+
+	// Might replace with brocker logic
+	mux.HandleFunc("/ws", cfg.handleConnection)
+	mux.HandleFunc("/status", handleStatusPage)
+	mux.HandleFunc("POST /admin/reset", cfg.handleReset)
+
+	// port := os.Getenv("PORT")
+	srv := http.Server{
+		Handler:      mux,
+		Addr:         ":" + cfg.Port,
+		WriteTimeout: 30 * time.Second,
+		ReadTimeout:  30 * time.Second,
+	}
+
+	// this blocks forever, until the server
+	// has an unrecoverable error
+	fmt.Printf("server started on http://localhost:%s\n", port)
+	serverErr := srv.ListenAndServe()
+	log.Fatal(serverErr)
+
 }
 
 func (cfg ServerConfig) handleConnection(w http.ResponseWriter, r *http.Request) {
@@ -43,7 +112,7 @@ func (cfg ServerConfig) handleConnection(w http.ResponseWriter, r *http.Request)
 	authChan := make(chan string, 1)
 	ctx = context.WithValue(ctx, "authChan", authChan)
 
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := cfg.Upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Upgrade error:", err)
 		return
@@ -78,21 +147,35 @@ func (cfg ServerConfig) handleConnection(w http.ResponseWriter, r *http.Request)
 			continue
 		}
 		var response websocketMessage
-		// Handler logic here
-		switch params.Token {
+		switch params.Channel {
 		case "sys":
 			log.Printf("System received: %s", message)
 		case "console":
 			response, err = cfg.handleConsole(ctx, conn, params.Data, outbound)
 			if err != nil {
 				log.Printf("[%s] Console: %v", connID, err)
-				continue
+				response = websocketMessage{
+					Channel: "console",
+					Token:   "error",
+					Data:    err.Error(),
+				}
 			}
 		case "auth":
-			authChan <- params.Data
-
-			response.Token = "auth"
-			response.Data = ""
+			select {
+			case authChan <- params.Data:
+				// Success
+			default:
+				log.Printf("[%s] auth channel full", connID)
+				response = websocketMessage{
+					Channel: "auth",
+					Token:   "error",
+					Data:    "auth channel full",
+				}
+			}
+			if response.Channel == "" {
+				response.Channel = "auth"
+				response.Data = ""
+			}
 		default:
 			response = websocketMessage{}
 		}
@@ -106,72 +189,52 @@ func (cfg ServerConfig) handleConnection(w http.ResponseWriter, r *http.Request)
 	log.Printf("Connection %s closed", connID)
 }
 
-type ServerConfig struct {
-	Port     string
-	DB       *database.Queries
-	Platform string
+type cliCommand struct {
+	name        string
+	description string
+	callback    func(
+		ctx context.Context,
+		authChan chan string,
+		outbound chan<- []byte,
+		args []string,
+	) (websocketMessage, error)
 }
 
-func main() {
-
-	godotenv.Load()
-
-	platform := os.Getenv("PLATFORM")
-	if platform == "" {
-		log.Fatal("PLATFORM must be set")
+func (cfg *ServerConfig) getCommands() map[string]cliCommand {
+	return map[string]cliCommand{
+		"clear": {
+			name:        "clear",
+			description: "Clear the screen",
+			callback:    cfg.handleClear,
+		},
+		"help": {
+			name:        "help",
+			description: "Display available commands",
+			callback:    cfg.handleHelp,
+		},
+		"register": {
+			name:        "register",
+			description: "Register a new user account",
+			callback:    cfg.handleRegister,
+		},
+		"login": {
+			name:        "login",
+			description: "Login to existing user account",
+			callback:    cfg.handleLogin,
+		},
+		"ping": {
+			name:        "ping",
+			description: "Ping the server",
+			callback:    cfg.handlePing,
+		},
 	}
-	port := os.Getenv("PORT")
-	if port == "" {
-		log.Fatal("PORT must be set")
-	}
-	if _, err := strconv.Atoi(port); err != nil {
-		log.Fatal("PORT must be a valid number")
-	}
-	dbURL := os.Getenv("DB_URL")
-	if dbURL == "" {
-		log.Fatal("DB_URL must be set")
-	}
-
-	dbConn, err := sql.Open("postgres", dbURL)
-	if err != nil {
-		log.Fatalf("Error opening database: %s", err)
-	}
-	dbQueries := database.New(dbConn)
-
-	cfg := ServerConfig{
-		Port:     port,
-		DB:       dbQueries,
-		Platform: platform,
-	}
-
-	mux := http.NewServeMux()
-
-	// Might replace with brocker logic
-	mux.HandleFunc("/ws", cfg.handleConnection)
-	mux.HandleFunc("/status", handleStatusPage)
-	mux.HandleFunc("POST /admin/reset", cfg.handleReset)
-
-	// port := os.Getenv("PORT")
-	srv := http.Server{
-		Handler:      mux,
-		Addr:         ":" + cfg.Port,
-		WriteTimeout: 30 * time.Second,
-		ReadTimeout:  30 * time.Second,
-	}
-
-	internalRegistry.InternalRegistry()
-
-	// this blocks forever, until the server
-	// has an unrecoverable error
-	fmt.Printf("server started on http://localhost:%s\n", port)
-	serverErr := srv.ListenAndServe()
-	log.Fatal(serverErr)
-
 }
 
-// TODO: refactor commands and create commandRegistry
-func (cfg ServerConfig) handleConsole(ctx context.Context, conn *websocket.Conn, message string, outbound chan<- []byte) (websocketMessage, error) {
+func (cfg ServerConfig) handleConsole(ctx context.Context, _ *websocket.Conn, message string, outbound chan<- []byte) (websocketMessage, error) {
 	authChan, ok := ctx.Value("authChan").(chan string)
+	if !ok {
+		return websocketMessage{}, fmt.Errorf("auth channel not found")
+	}
 	cmd := strings.ToLower(strings.Split(message, " ")[0])
 	args := strings.Split(message, " ")[1:]
 	log.Println("[DEV] cmd:", cmd)
@@ -180,77 +243,15 @@ func (cfg ServerConfig) handleConsole(ctx context.Context, conn *websocket.Conn,
 	}
 
 	response := websocketMessage{
-		Token: "console",
-		Data:  "",
+		Channel: "console",
 	}
 
-	switch cmd {
-	case "clear":
-		response.Token = "sys"
-		response.Data = "clear"
-	case "help":
-		response.Data = `Available commands:
-clear - clear window
-register <username> - sign up
-login <username> - login`
-	case "register":
-		if len(args) == 0 {
-			response.Data = "no username provided"
-			return response, nil
-		}
-		if len(args[0]) == 0 {
-			response.Data = "no username provided"
-			return response, nil
-		}
-		exists, err := cfg.DB.CheckUserByName(ctx, args[0])
-		if err != nil {
-			return websocketMessage{}, err
-		}
-		if !exists {
-			if !ok {
-				return websocketMessage{}, fmt.Errorf("auth channel not found")
-			}
-			// GO func
-			go cfg.registerUser(ctx, authChan, args[0], outbound)
-			response.Token = "auth"
-			response.Data = "type in your password"
-
-		} else {
-			response.Data = "username already taken"
-		}
-	case "login":
-		if len(args) == 0 {
-			response.Data = "no username provided"
-			return response, nil
-		}
-		if len(args[0]) == 0 {
-			response.Data = "no username provided"
-			return response, nil
-		}
-		exists, err := cfg.DB.CheckUserByName(ctx, args[0])
-		if err != nil {
-			return websocketMessage{}, err
-		}
-		if exists {
-
-			if !ok {
-				return websocketMessage{}, fmt.Errorf("auth channel not found")
-			}
-			// GO func
-			go cfg.loginUser(ctx, authChan, args[0], outbound)
-			response.Token = "auth"
-			response.Data = "type in your password"
-
-		} else {
-			response.Data = "username not registered"
-		}
-	case "ping":
-		response.Data = "pong"
-	default:
-		return websocketMessage{}, nil
+	command, exists := cfg.getCommands()[cmd]
+	if exists {
+		return command.callback(ctx, authChan, outbound, args)
+	} else {
+		return response, nil
 	}
-
-	return response, nil
 }
 
 func (cfg *ServerConfig) registerUser(ctx context.Context, authChan <-chan string, username string, outbound chan<- []byte) {
@@ -307,6 +308,96 @@ func (cfg *ServerConfig) loginUser(ctx context.Context, authChan <-chan string, 
 	}
 	outbound <- byteResponse
 
+}
+
+func (cfg *ServerConfig) handleClear(ctx context.Context, authChan chan string, outbound chan<- []byte, args []string) (websocketMessage, error) {
+	response := websocketMessage{
+		Channel: "sys",
+		Token:   "",
+		Data:    "clear",
+	}
+	return response, nil
+}
+
+func (cfg *ServerConfig) handleHelp(ctx context.Context, authChan chan string, outbound chan<- []byte, args []string) (websocketMessage, error) {
+	builder := strings.Builder{}
+	for _, command := range cfg.getCommands() {
+		builder.WriteString(fmt.Sprintf("%s - %s\n", command.name, command.description))
+	}
+	response := websocketMessage{
+		Channel: "console",
+		Token:   "",
+		Data:    builder.String(),
+	}
+	return response, nil
+}
+
+func (cfg *ServerConfig) handleRegister(ctx context.Context, authChan chan string, outbound chan<- []byte, args []string) (websocketMessage, error) {
+	response := websocketMessage{
+		Channel: "console",
+		Token:   "",
+		Data:    "",
+	}
+	if len(args) == 0 {
+		response.Data = "no username provided"
+		return response, nil
+	}
+	if len(args[0]) == 0 {
+		response.Data = "no username provided"
+		return response, nil
+	}
+	exists, err := cfg.DB.CheckUserByName(ctx, args[0])
+	if err != nil {
+		return websocketMessage{}, err
+	}
+	if !exists {
+		// GO func
+		go cfg.registerUser(ctx, authChan, args[0], outbound)
+		response.Channel = "auth"
+		response.Data = "type in your password"
+
+	} else {
+		response.Data = "username already taken"
+	}
+	return response, nil
+}
+
+func (cfg *ServerConfig) handleLogin(ctx context.Context, authChan chan string, outbound chan<- []byte, args []string) (websocketMessage, error) {
+	response := websocketMessage{
+		Channel: "console",
+		Token:   "",
+		Data:    "",
+	}
+	if len(args) == 0 {
+		response.Data = "no username provided"
+		return response, nil
+	}
+	if len(args[0]) == 0 {
+		response.Data = "no username provided"
+		return response, nil
+	}
+	exists, err := cfg.DB.CheckUserByName(ctx, args[0])
+	if err != nil {
+		return websocketMessage{}, err
+	}
+	if exists {
+		// GO func
+		go cfg.loginUser(ctx, authChan, args[0], outbound)
+		response.Channel = "auth"
+		response.Data = "type in your password"
+
+	} else {
+		response.Data = "username not registered"
+	}
+	return response, nil
+}
+
+func (cfg *ServerConfig) handlePing(ctx context.Context, authChan chan string, outbound chan<- []byte, args []string) (websocketMessage, error) {
+	return websocketMessage{
+		Channel: "console",
+		Token:   "",
+		Data:    "pong",
+	}, nil
 }
 
 func handleStatusPage(w http.ResponseWriter, r *http.Request) {
