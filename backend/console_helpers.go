@@ -8,7 +8,7 @@ import (
 
 func (cfg *serverConfig) handleHelp(ctx context.Context, client *Client, args []string) (websocketMessage, error) {
 	builder := strings.Builder{}
-	for _, command := range cfg.getCommands() {
+	for _, command := range cfg.getConsoleCommands() {
 		builder.WriteString(fmt.Sprintf("%s - %s\n", command.name, command.description))
 	}
 	response := websocketMessage{

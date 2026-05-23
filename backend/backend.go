@@ -166,7 +166,7 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 
 	defer func() {
 		cfg.ClientsMu.Lock()
-		if existingClient := cfg.Clients[client.ID]; existingClient != nil {
+		if existingClient := cfg.Clients[connID]; existingClient != nil {
 			existingClient.closed = true
 		}
 		delete(cfg.Clients, client.ID)
@@ -184,7 +184,7 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 		cfg.ClientsMu.Unlock()
 
 		cfg.ClientsMu.Lock()
-		delete(cfg.Clients, client.ID)
+		delete(cfg.Clients, connID)
 		cfg.ClientsMu.Unlock()
 		conn.Close()
 	}()
@@ -199,14 +199,14 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 		conn.SetReadDeadline(time.Now().Add(10 * time.Minute))
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			log.Printf("[SYS] %s read error: %v", connID, err)
+			log.Printf("[SYS] %s read error: %v", client.ID, err)
 			break
 		}
 
 		params := websocketMessage{}
 		err = json.Unmarshal(message, &params)
 		if err != nil {
-			log.Printf("[SYS] %s Failed to unmarshal JSON: %v", connID, err)
+			log.Printf("[SYS] %s Failed to unmarshal JSON: %v", client.ID, err)
 			continue
 		}
 		// DEV log
@@ -218,7 +218,7 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 		case "console":
 			response, err = cfg.handleConsole(ctx, conn, params.Data, client)
 			if err != nil {
-				log.Printf("[SYS] %s Console: %v", connID, err)
+				log.Printf("[SYS] %s Console: %v", client.ID, err)
 				response = websocketMessage{
 					Channel: "console",
 					Token:   "error",
@@ -230,7 +230,7 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 			case authChan <- params.Data:
 				// Success
 			default:
-				log.Printf("[SYS] %s auth channel full", connID)
+				log.Printf("[SYS] %s auth channel full", client.ID)
 				response = websocketMessage{
 					Channel: "auth",
 					Token:   "error",
@@ -246,7 +246,7 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 		}
 		byteResponse, err := json.Marshal(response)
 		if err != nil {
-			log.Printf("[SYS] %s failed to marshal JSON: %s", connID, err)
+			log.Printf("[SYS] %s failed to marshal JSON: %s", client.ID, err)
 			continue
 		}
 		client.Outbound <- byteResponse
@@ -265,7 +265,7 @@ type cliCommand struct {
 }
 
 // Console command registry
-func (cfg *serverConfig) getCommands() map[string]cliCommand {
+func (cfg *serverConfig) getConsoleCommands() map[string]cliCommand {
 	return map[string]cliCommand{
 		"clear": {
 			name:        "clear",
@@ -316,7 +316,7 @@ func (cfg *serverConfig) handleConsole(ctx context.Context, _ *websocket.Conn, m
 
 	response := websocketMessage{}
 
-	command, exists := cfg.getCommands()[cmd]
+	command, exists := cfg.getConsoleCommands()[cmd]
 	if exists {
 		return command.callback(ctx, client, args)
 	} else {

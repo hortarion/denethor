@@ -71,6 +71,13 @@ func (cfg *serverConfig) loginUser(ctx context.Context, client *Client, username
 }
 
 func (cfg *serverConfig) handleRegister(ctx context.Context, client *Client, args []string) (websocketMessage, error) {
+	if client.IsAuthed {
+		return websocketMessage{
+			Channel: "console",
+			Token:   "",
+			Data:    fmt.Sprintf("Already logged in as %s", client.ID),
+		}, nil
+	}
 	response := websocketMessage{
 		Channel: "",
 		Token:   "",
