@@ -217,7 +217,7 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 		case "sys":
 			log.Printf("System received: %s", message)
 		case "console":
-			response, err = cfg.handleConsole(ctx, conn, params.Data, outbound)
+			response, err = cfg.handleConsole(ctx, conn, params.Data, client.Outbound)
 			if err != nil {
 				log.Printf("[%s] Console: %v", connID, err)
 				response = websocketMessage{
@@ -310,9 +310,7 @@ func (cfg *serverConfig) handleConsole(ctx context.Context, _ *websocket.Conn, m
 	cmd := strings.ToLower(strings.Split(message, " ")[0])
 	args := strings.Split(message, " ")[1:]
 
-	response := websocketMessage{
-		Channel: "console",
-	}
+	response := websocketMessage{}
 
 	command, exists := cfg.getCommands()[cmd]
 	if exists {

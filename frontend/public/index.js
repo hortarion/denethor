@@ -55,6 +55,9 @@ themeToggle.addEventListener("click", () => {
 });
 
 window.printToOutput = function (text) {
+  if (text.length === 0) {
+    return;
+  }
   const now = new Date();
   const timestamp = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
   appendToOutput(`[${timestamp}] Denethor:\n` + text);
@@ -126,31 +129,40 @@ async function handleOutputUpdate() {
 
 function handleInputUpdate(input) {
   const message = JSON.parse(input);
-  if (message.channel === "auth" && message.token === "password") {
-    if (maskedInput === false) {
-      maskedInput = true;
-      inputField.type = "password";
-      inputField.placeholder = "Enter password here";
-      return;
-    }
+  switch (message.channel) {
+    case "auth":
+      if (message.token === "password") {
+        maskedInput = true;
+        inputField.type = "password";
+        inputField.placeholder = "Enter your password";
+        return;
+      } else {
+        maskedInput = false;
+        inputField.type = "text";
+        inputField.placeholder = "Enter text here";
+        printToPage(message.data);
+        return;
+      }
+    case "console":
+      if (message.data.length === 0) {
+        return;
+      }
+      printToPage(message.data);
+      break;
+    case "sys":
+      handleSystemMessage(message);
+      break;
+    default:
+      console.log("Unknown input package", message);
   }
-  if (maskedInput === true && message.channel === "auth") {
-    maskedInput = false;
-    inputField.type = "text";
-    inputField.placeholder = "Enter text here";
-    return;
-  }
+}
 
-  if (message.data.length == 0) {
-    return;
-  }
-  if (message.channel === "sys") {
-    if (message.data === "clear") {
+function handleSystemMessage(message) {
+  switch (message.data) {
+    case "clear":
       clearOutput();
       return;
-    }
   }
-  printToPage(message.data);
 }
 
 output.addEventListener("outputUpdated", async () => {

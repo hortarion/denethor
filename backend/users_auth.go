@@ -26,8 +26,8 @@ func (cfg *serverConfig) registerUser(ctx context.Context, authChan <-chan strin
 		return
 	}
 	response := websocketMessage{
-		Token: "console",
-		Data:  fmt.Sprintf("%s has been registered", user.Username),
+		Channel: "console",
+		Data:    fmt.Sprintf("%s has been registered", user.Username),
 	}
 	byteResponse, err := json.Marshal(response)
 	if err != nil {
@@ -45,15 +45,15 @@ func (cfg *serverConfig) loginUser(ctx context.Context, authChan <-chan string, 
 		return
 	}
 	response := websocketMessage{
-		Token: "auth",
-		Data:  "incorrect password",
+		Channel: "auth",
+		Data:    "incorrect password",
 	}
 	valid, err := auth.CheckPasswordHash(password, user.HashedPassword)
 	if err != nil {
 		log.Printf("[LOGIN] error: %s", err)
 	}
 	if valid {
-		response.Token = "auth"
+		response.Channel = "auth"
 		response.Data = fmt.Sprintf("logged in as %s", user.Username)
 	}
 
@@ -67,15 +67,17 @@ func (cfg *serverConfig) loginUser(ctx context.Context, authChan <-chan string, 
 
 func (cfg *serverConfig) handleRegister(ctx context.Context, authChan chan string, outbound chan<- []byte, args []string) (websocketMessage, error) {
 	response := websocketMessage{
-		Channel: "console",
+		Channel: "",
 		Token:   "",
 		Data:    "",
 	}
 	if len(args) == 0 {
+		response.Channel = "console"
 		response.Data = "no username provided"
 		return response, nil
 	}
 	if len(args[0]) == 0 {
+		response.Channel = "console"
 		response.Data = "no username provided"
 		return response, nil
 	}
@@ -90,6 +92,7 @@ func (cfg *serverConfig) handleRegister(ctx context.Context, authChan chan strin
 		response.Token = "password"
 
 	} else {
+		response.Channel = "console"
 		response.Data = "username already taken"
 	}
 	return response, nil
@@ -97,15 +100,17 @@ func (cfg *serverConfig) handleRegister(ctx context.Context, authChan chan strin
 
 func (cfg *serverConfig) handleLogin(ctx context.Context, authChan chan string, outbound chan<- []byte, args []string) (websocketMessage, error) {
 	response := websocketMessage{
-		Channel: "console",
+		Channel: "",
 		Token:   "",
 		Data:    "",
 	}
 	if len(args) == 0 {
+		response.Channel = "console"
 		response.Data = "no username provided"
 		return response, nil
 	}
 	if len(args[0]) == 0 {
+		response.Channel = "console"
 		response.Data = "no username provided"
 		return response, nil
 	}
@@ -120,6 +125,7 @@ func (cfg *serverConfig) handleLogin(ctx context.Context, authChan chan string, 
 		response.Token = "password"
 
 	} else {
+		response.Channel = "console"
 		response.Data = "username not registered"
 	}
 	return response, nil
