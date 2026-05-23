@@ -115,7 +115,7 @@ async function handleOutputUpdate() {
 
 function handleInputUpdate(input) {
   const message = JSON.parse(input);
-  if (message.channel === "auth" && message.data === "type in your password") {
+  if (message.channel === "auth" && message.token === "password") {
     if (maskedInput === false) {
       maskedInput = true;
       inputField.type = "password";
