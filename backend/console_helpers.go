@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func (cfg *serverConfig) handleClear(ctx context.Context, authChan chan string, outbound chan<- []byte, args []string) (websocketMessage, error) {
+func (cfg *serverConfig) handleClear(ctx context.Context, client *Client, args []string) (websocketMessage, error) {
 	response := websocketMessage{
 		Channel: "sys",
 		Token:   "",
@@ -15,7 +15,7 @@ func (cfg *serverConfig) handleClear(ctx context.Context, authChan chan string, 
 	return response, nil
 }
 
-func (cfg *serverConfig) handleHelp(ctx context.Context, authChan chan string, outbound chan<- []byte, args []string) (websocketMessage, error) {
+func (cfg *serverConfig) handleHelp(ctx context.Context, client *Client, args []string) (websocketMessage, error) {
 	builder := strings.Builder{}
 	for _, command := range cfg.getCommands() {
 		builder.WriteString(fmt.Sprintf("%s - %s\n", command.name, command.description))
@@ -28,7 +28,7 @@ func (cfg *serverConfig) handleHelp(ctx context.Context, authChan chan string, o
 	return response, nil
 }
 
-func (cfg *serverConfig) handlePing(ctx context.Context, authChan chan string, outbound chan<- []byte, args []string) (websocketMessage, error) {
+func (cfg *serverConfig) handlePing(ctx context.Context, client *Client, args []string) (websocketMessage, error) {
 	return websocketMessage{
 		Channel: "console",
 		Token:   "",

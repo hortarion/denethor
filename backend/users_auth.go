@@ -10,8 +10,8 @@ import (
 	"github.com/hortarion/server/internal/database"
 )
 
-func (cfg *serverConfig) registerUser(ctx context.Context, authChan <-chan string, username string, outbound chan<- []byte) {
-	password := <-authChan
+func (cfg *serverConfig) registerUser(ctx context.Context, client *Client, username string) {
+	password := <-client.AuthChan
 	hash, err := auth.HashPassword(password)
 	if err != nil {
 		log.Printf("[REGIST] error: %s", err)
@@ -34,11 +34,11 @@ func (cfg *serverConfig) registerUser(ctx context.Context, authChan <-chan strin
 		log.Printf("[REGIST] error: %s", err)
 		return
 	}
-	outbound <- byteResponse
+	client.Outbound <- byteResponse
 }
 
-func (cfg *serverConfig) loginUser(ctx context.Context, authChan <-chan string, username string, outbound chan<- []byte) {
-	password := <-authChan
+func (cfg *serverConfig) loginUser(ctx context.Context, client *Client, username string) {
+	password := <-client.AuthChan
 	user, err := cfg.DB.GetUserByUsername(ctx, username)
 	if err != nil {
 		log.Printf("[LOGIN] error: %s", err)
@@ -55,6 +55,9 @@ func (cfg *serverConfig) loginUser(ctx context.Context, authChan <-chan string, 
 	if valid {
 		response.Channel = "auth"
 		response.Data = fmt.Sprintf("logged in as %s", user.Username)
+		client.IsAuthed = true
+		client.ID = username
+		log.Printf("[SYS] %s logged in", client.ID)
 	}
 
 	byteResponse, err := json.Marshal(response)
@@ -62,10 +65,10 @@ func (cfg *serverConfig) loginUser(ctx context.Context, authChan <-chan string, 
 		log.Printf("[LOGIN] error: %s", err)
 		return
 	}
-	outbound <- byteResponse
+	client.Outbound <- byteResponse
 }
 
-func (cfg *serverConfig) handleRegister(ctx context.Context, authChan chan string, outbound chan<- []byte, args []string) (websocketMessage, error) {
+func (cfg *serverConfig) handleRegister(ctx context.Context, client *Client, args []string) (websocketMessage, error) {
 	response := websocketMessage{
 		Channel: "",
 		Token:   "",
@@ -87,7 +90,7 @@ func (cfg *serverConfig) handleRegister(ctx context.Context, authChan chan strin
 	}
 	if !exists {
 		// GO func
-		go cfg.registerUser(ctx, authChan, args[0], outbound)
+		go cfg.registerUser(ctx, client, args[0])
 		response.Channel = "auth"
 		response.Token = "password"
 
@@ -98,7 +101,7 @@ func (cfg *serverConfig) handleRegister(ctx context.Context, authChan chan strin
 	return response, nil
 }
 
-func (cfg *serverConfig) handleLogin(ctx context.Context, authChan chan string, outbound chan<- []byte, args []string) (websocketMessage, error) {
+func (cfg *serverConfig) handleLogin(ctx context.Context, client *Client, args []string) (websocketMessage, error) {
 	response := websocketMessage{
 		Channel: "",
 		Token:   "",
@@ -120,7 +123,7 @@ func (cfg *serverConfig) handleLogin(ctx context.Context, authChan chan string, 
 	}
 	if exists {
 		// GO func
-		go cfg.loginUser(ctx, authChan, args[0], outbound)
+		go cfg.loginUser(ctx, client, args[0])
 		response.Channel = "auth"
 		response.Token = "password"
 

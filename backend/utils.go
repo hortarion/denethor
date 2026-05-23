@@ -17,7 +17,6 @@ func (cfg *serverConfig) updateClientID(oldID, newID string) {
 	if client, exists := cfg.Clients[oldID]; exists {
 		delete(cfg.Clients, oldID)
 		client.ID = newID
-		client.Username = newID
 		client.IsAuthed = true
 		cfg.Clients[newID] = client
 	}

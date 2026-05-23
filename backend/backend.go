@@ -39,7 +39,6 @@ type Client struct {
 	Outbound chan []byte
 	AuthChan chan string
 	IsAuthed bool
-	Username string
 	closed   bool
 }
 
@@ -150,16 +149,16 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 	cfg.ClientsMu.Lock()
 	cfg.Clients[connID] = client
 	cfg.ClientsMu.Unlock()
-	log.Printf("New WebSocket connection: %s from %s", connID, conn.RemoteAddr())
+	log.Printf("[SYS] New WebSocket connection: %s from %s", connID, conn.RemoteAddr())
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 
 	go func() {
 		defer wg.Done()
-		for msg := range outbound {
+		for msg := range client.Outbound {
 			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-				log.Printf("[%s] Write error: %v", connID, err)
+				log.Printf("[SYS] %s Write error: %v", connID, err)
 				break
 			}
 		}
@@ -200,26 +199,26 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 		conn.SetReadDeadline(time.Now().Add(10 * time.Minute))
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			log.Printf("[%s] read error: %v", connID, err)
+			log.Printf("[SYS] %s read error: %v", connID, err)
 			break
 		}
 
 		params := websocketMessage{}
 		err = json.Unmarshal(message, &params)
 		if err != nil {
-			log.Printf("[%s] Failed to unmarshal JSON: %v", connID, err)
+			log.Printf("[SYS] %s Failed to unmarshal JSON: %v", connID, err)
 			continue
 		}
 		// DEV log
-		fmt.Printf("[%s] sent: %s\n", client.ID, params)
+		fmt.Printf("[SYS] %s sent: %s\n", client.ID, params)
 		var response websocketMessage
 		switch params.Channel {
 		case "sys":
-			log.Printf("System received: %s", message)
+			log.Printf("[SYS] received: %s", message)
 		case "console":
-			response, err = cfg.handleConsole(ctx, conn, params.Data, client.Outbound)
+			response, err = cfg.handleConsole(ctx, conn, params.Data, client)
 			if err != nil {
-				log.Printf("[%s] Console: %v", connID, err)
+				log.Printf("[SYS] %s Console: %v", connID, err)
 				response = websocketMessage{
 					Channel: "console",
 					Token:   "error",
@@ -231,7 +230,7 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 			case authChan <- params.Data:
 				// Success
 			default:
-				log.Printf("[%s] auth channel full", connID)
+				log.Printf("[SYS] %s auth channel full", connID)
 				response = websocketMessage{
 					Channel: "auth",
 					Token:   "error",
@@ -247,10 +246,10 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 		}
 		byteResponse, err := json.Marshal(response)
 		if err != nil {
-			log.Printf("[%s] failed to marshal JSON: %s", connID, err)
+			log.Printf("[SYS] %s failed to marshal JSON: %s", connID, err)
 			continue
 		}
-		outbound <- byteResponse
+		client.Outbound <- byteResponse
 	}
 	log.Printf("Connection %s closed", connID)
 }
@@ -260,8 +259,7 @@ type cliCommand struct {
 	description string
 	callback    func(
 		ctx context.Context,
-		authChan chan string,
-		outbound chan<- []byte,
+		client *Client,
 		args []string,
 	) (websocketMessage, error)
 }
@@ -302,8 +300,9 @@ func (cfg *serverConfig) getCommands() map[string]cliCommand {
 	}
 }
 
-func (cfg *serverConfig) handleConsole(ctx context.Context, _ *websocket.Conn, message string, outbound chan<- []byte) (websocketMessage, error) {
+func (cfg *serverConfig) handleConsole(ctx context.Context, _ *websocket.Conn, message string, client *Client) (websocketMessage, error) {
 	authChan, ok := ctx.Value("authChan").(chan string)
+	client.AuthChan = authChan
 	if !ok {
 		return websocketMessage{}, fmt.Errorf("auth channel not found")
 	}
@@ -314,13 +313,13 @@ func (cfg *serverConfig) handleConsole(ctx context.Context, _ *websocket.Conn, m
 
 	command, exists := cfg.getCommands()[cmd]
 	if exists {
-		return command.callback(ctx, authChan, outbound, args)
+		return command.callback(ctx, client, args)
 	} else {
 		return response, nil
 	}
 }
 
-func (cfg *serverConfig) handleShout(ctx context.Context, authChan chan string, outbound chan<- []byte, args []string) (websocketMessage, error) {
+func (cfg *serverConfig) handleShout(ctx context.Context, client *Client, args []string) (websocketMessage, error) {
 	message := websocketMessage{
 		Channel: "console",
 		Token:   "broadcast",
