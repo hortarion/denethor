@@ -29,6 +29,18 @@ type serverConfig struct {
 	Platform       string
 	AllowedOrigins []string
 	Upgrader       websocket.Upgrader
+	Clients        map[string]*Client
+	ClientsMu      sync.Mutex
+}
+
+type Client struct {
+	ID       string
+	Conn     *websocket.Conn
+	Outbound chan []byte
+	AuthChan chan string
+	IsAuthed bool
+	Username string
+	closed   bool
 }
 
 type websocketMessage struct {
@@ -72,6 +84,8 @@ func main() {
 		DB:             dbQueries,
 		Platform:       platform,
 		AllowedOrigins: []string{"http://localhost:8090"},
+		Clients:        make(map[string]*Client),
+		ClientsMu:      sync.Mutex{},
 	}
 
 	var upgrader = websocket.Upgrader{
@@ -107,39 +121,42 @@ func main() {
 
 }
 
-// Client map for broadcasting
-var (
-	clients   = make(map[string]chan []byte)
-	clientsMu sync.Mutex
-)
-
 func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request) {
-	// Create context and establish WS connection
-	ctx := r.Context()
+	// Create ID and associate with context
+	connID := uuid.New().String()
+	ctx := context.WithValue(r.Context(), "connID", connID)
 
+	// Establish WS connection
 	conn, err := cfg.Upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("Upgrade error:", err)
 		return
 	}
-	connID := uuid.New().String()
-	log.Printf("New WebSocket connection: %s from %s", connID, conn.RemoteAddr())
-	defer func() {
-		clientsMu.Lock()
-		delete(clients, connID)
-		clientsMu.Unlock()
-		conn.Close()
-	}()
 
-	// Concurrent sending of outbound messages
-	outbound := make(chan []byte, 10)
+	// Set deadlines
+	conn.SetReadDeadline(time.Now().Add(10 * time.Minute))
+
+	// Outbound channel
+	outbound := make(chan []byte)
+
+	client := &Client{
+		ID:       connID,
+		Conn:     conn,
+		Outbound: outbound,
+		IsAuthed: false,
+	}
 
 	// Add connection to client map
-	clientsMu.Lock()
-	clients[connID] = outbound
-	clientsMu.Unlock()
+	cfg.ClientsMu.Lock()
+	cfg.Clients[connID] = client
+	cfg.ClientsMu.Unlock()
+	log.Printf("New WebSocket connection: %s from %s", connID, conn.RemoteAddr())
+
+	var wg sync.WaitGroup
+	wg.Add(1)
 
 	go func() {
+		defer wg.Done()
 		for msg := range outbound {
 			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
 				log.Printf("[%s] Write error: %v", connID, err)
@@ -148,12 +165,39 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 		}
 	}()
 
+	defer func() {
+		cfg.ClientsMu.Lock()
+		if existingClient := cfg.Clients[client.ID]; existingClient != nil {
+			existingClient.closed = true
+		}
+		delete(cfg.Clients, client.ID)
+		cfg.ClientsMu.Unlock()
+
+		cfg.ClientsMu.Lock()
+		if client := cfg.Clients[client.ID]; client != nil && !client.closed {
+			select {
+			case <-client.Outbound:
+			// Already closed
+			default:
+				close(client.Outbound)
+			}
+		}
+		cfg.ClientsMu.Unlock()
+
+		cfg.ClientsMu.Lock()
+		delete(cfg.Clients, client.ID)
+		cfg.ClientsMu.Unlock()
+		conn.Close()
+	}()
+
 	// Authentication channel to pass login creds to auth package
 	authChan := make(chan string, 1)
+	client.AuthChan = authChan
 	ctx = context.WithValue(ctx, "authChan", authChan)
 
 	// Handle incoming messages
 	for {
+		conn.SetReadDeadline(time.Now().Add(10 * time.Minute))
 		_, message, err := conn.ReadMessage()
 		if err != nil {
 			log.Printf("[%s] read error: %v", connID, err)

@@ -123,7 +123,7 @@ function handleInputUpdate(input) {
       return;
     }
   }
-  if (maskedInput === true) {
+  if (maskedInput === true && message.channel === "auth") {
     maskedInput = false;
     inputField.type = "text";
     inputField.placeholder = "Enter text here";

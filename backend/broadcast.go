@@ -6,19 +6,19 @@ import (
 )
 
 func (cfg *serverConfig) broadcast(message websocketMessage) {
-	clientsMu.Lock()
-	defer clientsMu.Unlock()
+	cfg.ClientsMu.Lock()
+	defer cfg.ClientsMu.Unlock()
 
 	byteMessage, err := json.Marshal(message)
 	if err != nil {
 		log.Printf("Failed to marshal broadcast")
 	}
 
-	for connID, outbound := range clients {
+	for _, client := range cfg.Clients {
 		select {
-		case outbound <- byteMessage:
+		case client.Outbound <- byteMessage:
 		default:
-			log.Printf("[%s] Outbound channel full, dropping message", connID)
+			log.Printf("[%s] Outbound channel full, dropping message", client.ID)
 		}
 	}
 }

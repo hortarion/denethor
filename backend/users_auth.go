@@ -63,7 +63,6 @@ func (cfg *serverConfig) loginUser(ctx context.Context, authChan <-chan string, 
 		return
 	}
 	outbound <- byteResponse
-
 }
 
 func (cfg *serverConfig) handleRegister(ctx context.Context, authChan chan string, outbound chan<- []byte, args []string) (websocketMessage, error) {
