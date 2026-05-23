@@ -210,6 +210,8 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 			log.Printf("[%s] Failed to unmarshal JSON: %v", connID, err)
 			continue
 		}
+		// DEV log
+		fmt.Printf("[%s] sent: %s\n", client.ID, params)
 		var response websocketMessage
 		switch params.Channel {
 		case "sys":
@@ -307,10 +309,6 @@ func (cfg *serverConfig) handleConsole(ctx context.Context, _ *websocket.Conn, m
 	}
 	cmd := strings.ToLower(strings.Split(message, " ")[0])
 	args := strings.Split(message, " ")[1:]
-	log.Println("[DEV] cmd:", cmd)
-	for idx, arg := range args {
-		log.Println("[DEV]", idx+1, ":", arg)
-	}
 
 	response := websocketMessage{
 		Channel: "console",
@@ -327,7 +325,7 @@ func (cfg *serverConfig) handleConsole(ctx context.Context, _ *websocket.Conn, m
 func (cfg *serverConfig) handleShout(ctx context.Context, authChan chan string, outbound chan<- []byte, args []string) (websocketMessage, error) {
 	message := websocketMessage{
 		Channel: "console",
-		Token:   "",
+		Token:   "broadcast",
 		Data:    "Someone shouts very loud",
 	}
 	cfg.broadcast(message)

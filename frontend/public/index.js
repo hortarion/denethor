@@ -63,10 +63,10 @@ window.printToOutput = function (text) {
 
 window.clearOutput = function () {
   outputLines = [];
-  updateOutputLDisplay();
+  updateOutputDisplay();
 };
 
-function updateOutputLDisplay() {
+function updateOutputDisplay() {
   output.textContent = outputLines.join("\n");
   output.scrollTop = output.scrollHeight;
 }
@@ -76,6 +76,15 @@ function printToPage(text) {
 }
 
 function appendToOutput(text) {
+  const denethorRegex = /\[.*?\] Denethor:/;
+  if (denethorRegex.test(text)) {
+    outputLines.push(text);
+    if (outputLines.length > MAX_LINES) {
+      outputLines = outputLines.slice(-MAX_LINES);
+    }
+    updateOutputDisplay();
+    return;
+  }
   if (maskedInput) {
     const now = new Date();
     const timestamp = `${now.getHours()}:${now.getMinutes()}:${now.getSeconds()}`;
@@ -94,16 +103,18 @@ function appendToOutput(text) {
   if (outputLines.length > MAX_LINES) {
     outputLines = outputLines.slice(-MAX_LINES);
   }
-  updateOutputLDisplay();
+  updateOutputDisplay();
 }
 
 async function handleOutputUpdate() {
   const lastLine = outputLines[outputLines.length - 1];
+  const regexDenethor = /\[.*?\] Denethor: /;
+  if (regexDenethor.test(lastLine)) {
+    return;
+  }
   const regex = /\[.*?\] You: /;
   if (regex.test(lastLine)) {
-    const text = [];
     const commands = lastLine.split(/\[.*?\] You: /)[1];
-
     const message = {
       channel: "console",
       token: "",
