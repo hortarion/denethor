@@ -282,6 +282,11 @@ func (cfg *serverConfig) getCommands() map[string]cliCommand {
 			description: "Login to existing user account",
 			callback:    cfg.handleLogin,
 		},
+		"logout": {
+			name:        "logout",
+			description: "Logout from user account",
+			callback:    cfg.handleLogout,
+		},
 		"ping": {
 			name:        "ping",
 			description: "Ping the server",
@@ -317,17 +322,4 @@ func (cfg *serverConfig) handleConsole(ctx context.Context, _ *websocket.Conn, m
 	} else {
 		return response, nil
 	}
-}
-
-func (cfg *serverConfig) handleShout(ctx context.Context, client *Client, args []string) (websocketMessage, error) {
-	message := websocketMessage{
-		Channel: "console",
-		Token:   "broadcast",
-		Data:    "Someone shouts very loud",
-	}
-	cfg.broadcast(message)
-	return websocketMessage{
-		Channel: "console",
-		Data:    "It was you!",
-	}, nil
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/google/uuid"
 	"github.com/hortarion/server/internal/auth"
 	"github.com/hortarion/server/internal/database"
 )
@@ -57,6 +58,7 @@ func (cfg *serverConfig) loginUser(ctx context.Context, client *Client, username
 		response.Data = fmt.Sprintf("logged in as %s", user.Username)
 		client.IsAuthed = true
 		client.ID = username
+		cfg.sysAuthenticated(client)
 		log.Printf("[SYS] %s logged in", client.ID)
 	}
 
@@ -132,4 +134,22 @@ func (cfg *serverConfig) handleLogin(ctx context.Context, client *Client, args [
 		response.Data = "username not registered"
 	}
 	return response, nil
+}
+
+func (cfg *serverConfig) handleLogout(_ context.Context, client *Client, _ []string) (websocketMessage, error) {
+	if client.IsAuthed {
+		client.ID = uuid.New().String()
+		client.IsAuthed = false
+		cfg.sysLogout(client)
+		return websocketMessage{
+			Channel: "console",
+			Token:   "",
+			Data:    "You are logged out",
+		}, nil
+	}
+	return websocketMessage{
+		Channel: "console",
+		Token:   "",
+		Data:    "",
+	}, nil
 }

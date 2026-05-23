@@ -20,6 +20,7 @@ socket.onclose = () => {
   console.log("Disconnected from backend server");
 };
 
+const userField = document.getElementById("userField");
 const output = document.getElementById("output");
 const inputField = document.getElementById("inputField");
 const submitButton = document.getElementById("submitButton");
@@ -158,10 +159,17 @@ function handleInputUpdate(input) {
 }
 
 function handleSystemMessage(message) {
-  switch (message.data) {
+  switch (message.token) {
     case "clear":
       clearOutput();
       return;
+    case "authenticated":
+      userField.textContent = "Logged in as " + message.data;
+      return;
+    case "logout":
+      userField.textContent = "Guest";
+    default:
+      console.log("Unknown system message token:", message.token);
   }
 }
 
