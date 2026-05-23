@@ -59,6 +59,7 @@ func (cfg *serverConfig) loginUser(ctx context.Context, client *Client, username
 		client.IsAuthed = true
 		client.ID = username
 		cfg.sysAuthenticated(client)
+		cfg.sysJWT(ctx, client)
 		log.Printf("[SYS] %s logged in", client.ID)
 	}
 

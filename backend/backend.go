@@ -1,3 +1,8 @@
+/* BUGS
+ * login returns incorrect password immediately on first try
+ * refreshing twice results in logout (browser / extension issue?)
+ */
+
 package main
 
 import (
@@ -18,6 +23,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/hortarion/server/internal/auth"
 	"github.com/hortarion/server/internal/database"
 
 	"github.com/joho/godotenv"
@@ -31,6 +37,7 @@ type serverConfig struct {
 	Upgrader       websocket.Upgrader
 	Clients        map[string]*Client
 	ClientsMu      sync.Mutex
+	JWTSecret      string
 }
 
 type Client struct {
@@ -71,6 +78,10 @@ func main() {
 	if allowedOrigins == "" {
 		log.Fatal("ALLOWED_ORIGINS must be set")
 	}
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		log.Fatal("JWT_SECRET must be set")
+	}
 
 	dbConn, err := sql.Open("postgres", dbURL)
 	if err != nil {
@@ -85,6 +96,7 @@ func main() {
 		AllowedOrigins: []string{"http://localhost:8090"},
 		Clients:        make(map[string]*Client),
 		ClientsMu:      sync.Mutex{},
+		JWTSecret:      jwtSecret,
 	}
 
 	var upgrader = websocket.Upgrader{
@@ -151,6 +163,11 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 	cfg.ClientsMu.Unlock()
 	log.Printf("[SYS] New WebSocket connection: %s from %s", connID, conn.RemoteAddr())
 
+	// Authentication channel to pass login creds to auth package
+	authChan := make(chan string, 1)
+	client.AuthChan = authChan
+	ctx = context.WithValue(ctx, "authChan", authChan)
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 
@@ -164,6 +181,7 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 		}
 	}()
 
+	// Cleanup connection on close
 	defer func() {
 		cfg.ClientsMu.Lock()
 		if existingClient := cfg.Clients[connID]; existingClient != nil {
@@ -172,6 +190,7 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 		delete(cfg.Clients, client.ID)
 		cfg.ClientsMu.Unlock()
 
+		// Close channel safely
 		cfg.ClientsMu.Lock()
 		if client := cfg.Clients[client.ID]; client != nil && !client.closed {
 			select {
@@ -183,16 +202,13 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 		}
 		cfg.ClientsMu.Unlock()
 
+		wg.Wait()
+
 		cfg.ClientsMu.Lock()
 		delete(cfg.Clients, connID)
 		cfg.ClientsMu.Unlock()
 		conn.Close()
 	}()
-
-	// Authentication channel to pass login creds to auth package
-	authChan := make(chan string, 1)
-	client.AuthChan = authChan
-	ctx = context.WithValue(ctx, "authChan", authChan)
 
 	// Handle incoming messages
 	for {
@@ -226,9 +242,43 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 				}
 			}
 		case "auth":
+			if params.Token == "jwt" {
+				jwtToken := params.Data
+
+				userID, err := auth.ValidateJWT(jwtToken, cfg.JWTSecret)
+				if err != nil {
+					log.Printf("[SYS] %s invalid JWT", client.ID)
+				} else {
+					user, err := cfg.DB.GetUserByID(ctx, userID)
+					if err != nil {
+						log.Printf("[SYS] %s JWT not connected to known user", client.ID)
+					} else {
+						// Update client with authenticated user
+						cfg.ClientsMu.Lock()
+						delete(cfg.Clients, client.ID)
+						client.IsAuthed = true
+						client.ID = user.Username
+						cfg.Clients[user.Username] = client
+						cfg.ClientsMu.Unlock()
+
+						response := websocketMessage{
+							Channel: "sys",
+							Token:   "authenticated",
+							Data:    user.Username,
+						}
+						byteResponse, err := json.Marshal(response)
+						if err != nil {
+							log.Printf("[SYS] %s failed to marshal", client.ID)
+						}
+						client.Outbound <- byteResponse
+
+					}
+				}
+			}
 			select {
 			case authChan <- params.Data:
 				// Success
+				continue
 			default:
 				log.Printf("[SYS] %s auth channel full", client.ID)
 				response = websocketMessage{

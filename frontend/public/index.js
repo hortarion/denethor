@@ -1,19 +1,55 @@
-const socket = new WebSocket(`ws://${window.location.hostname}:8080/ws`);
+function setupWebSocket() {
+  const jwt = localStorage.getItem("jwt");
+  const socket = new WebSocket(`ws://${window.location.hostname}:8080/ws`);
 
-socket.onopen = () => {
-  console.log("Connected to backend server");
-  const message = {
-    channel: "sys",
-    token: "",
-    data: "Client connected",
+  socket.onopen = () => {
+    console.log("Connected to backend server");
+
+    if (jwt) {
+      socket.send(
+        JSON.stringify({
+          channel: "auth",
+          token: "jwt",
+          data: jwt,
+        }),
+      );
+    }
+    const message = {
+      channel: "sys",
+      token: "",
+      data: "Client connected",
+    };
+    socket.send(JSON.stringify(message));
   };
-  socket.send(JSON.stringify(message));
-};
+  return socket;
+}
+
+let socket = setupWebSocket();
+
+function reconnectWebSocket() {
+  if (socket) {
+    socket.close();
+  }
+  socket = setupWebSocket();
+}
+
+function storeJWT(token) {
+  localStorage.setItem("jwt", token);
+}
+
+function clearJWT() {
+  localStorage.removeItem("jwt");
+  userField.textContent = "Guest";
+}
 
 socket.onmessage = (event) => {
+  const packet = JSON.parse(event.data);
+  if (packet.token) {
+    localStorage.setItem("jwt", packet.token);
+  }
   // DEBUG LOG
-  console.log("Message from server:", event.data);
-  handleInputUpdate(event.data);
+  console.log("Packet from server:", packet);
+  handleInputUpdate(packet);
 };
 
 socket.onclose = () => {
@@ -128,11 +164,10 @@ async function handleOutputUpdate() {
   }
 }
 
-function handleInputUpdate(input) {
-  const message = JSON.parse(input);
-  switch (message.channel) {
+function handleInputUpdate(packet) {
+  switch (packet.channel) {
     case "auth":
-      if (message.token === "password") {
+      if (packet.token === "password") {
         maskedInput = true;
         inputField.type = "password";
         inputField.placeholder = "Enter your password";
@@ -141,20 +176,20 @@ function handleInputUpdate(input) {
         maskedInput = false;
         inputField.type = "text";
         inputField.placeholder = "Enter text here";
-        printToPage(message.data);
+        printToPage(packet.data);
         return;
       }
     case "console":
-      if (message.data.length === 0) {
+      if (packet.data.length === 0) {
         return;
       }
-      printToPage(message.data);
+      printToPage(packet.data);
       break;
     case "sys":
-      handleSystemMessage(message);
+      handleSystemMessage(packet);
       break;
     default:
-      console.log("Unknown input package", message);
+      console.log("Unknown input package", packet);
   }
 }
 
@@ -167,7 +202,11 @@ function handleSystemMessage(message) {
       userField.textContent = "Logged in as " + message.data;
       return;
     case "logout":
-      userField.textContent = "Guest";
+      clearJWT();
+      return;
+    case "JWT":
+      storeJWT(message.data);
+      return;
     default:
       console.log("Unknown system message token:", message.token);
   }
@@ -175,6 +214,20 @@ function handleSystemMessage(message) {
 
 output.addEventListener("outputUpdated", async () => {
   await handleOutputUpdate();
+});
+
+output.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    reconnectWebSocket();
+  }
+});
+
+window.addEventListener("online", reconnectWebSocket);
+
+window.addEventListener("beforeunload", () => {
+  if (socket) {
+    socket.close();
+  }
 });
 
 if (document.readyState === "loading") {
