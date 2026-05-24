@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/google/uuid"
 	"github.com/hortarion/server/internal/auth"
 	"github.com/hortarion/server/internal/database"
 )
@@ -117,6 +116,11 @@ func (cfg *serverConfig) handleLogin(ctx context.Context, client *Client, args [
 		Token:   "",
 		Data:    "",
 	}
+
+	cfg.ClientsMu.Lock()
+	client.AuthChan = make(chan string, 1)
+	cfg.ClientsMu.Unlock()
+
 	if len(args) == 0 {
 		response.Channel = "console"
 		response.Data = "no username provided"
@@ -144,20 +148,37 @@ func (cfg *serverConfig) handleLogin(ctx context.Context, client *Client, args [
 	return response, nil
 }
 
-func (cfg *serverConfig) handleLogout(_ context.Context, client *Client, _ []string) (websocketMessage, error) {
-	if client.IsAuthed {
-		client.ID = uuid.New().String()
-		client.IsAuthed = false
-		cfg.sysLogout(client)
-		return websocketMessage{
-			Channel: "console",
-			Token:   "",
-			Data:    "You are logged out",
-		}, nil
+func (cfg *serverConfig) handleLogout(ctx context.Context, client *Client, args []string) (websocketMessage, error) {
+	// Reset authentication state
+	cfg.ClientsMu.Lock()
+	if existingClient, exists := cfg.Clients[client.ID]; exists {
+		existingClient.IsAuthed = false
+		// Create new auth channel to clear any pending auth state
+		existingClient.AuthChan = make(chan string, 1)
 	}
+	cfg.ClientsMu.Unlock()
+
+	// Clear JWT
+	response := websocketMessage{
+		Channel: "sys",
+		Token:   "logout",
+		Data:    "",
+	}
+
+	byteResponse, _ := json.Marshal(response)
+	client.Outbound <- byteResponse
+
+	clearResponse := websocketMessage{
+		Channel: "sys",
+		Token:   "clear",
+		Data:    "",
+	}
+
+	byteClearResponse, _ := json.Marshal(clearResponse)
+	client.Outbound <- byteClearResponse
+
 	return websocketMessage{
 		Channel: "console",
-		Token:   "",
-		Data:    "",
+		Data:    "Logged out successfully",
 	}, nil
 }

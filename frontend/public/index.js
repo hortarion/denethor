@@ -5,7 +5,7 @@ function setupWebSocket() {
   socket.onopen = () => {
     console.log("Connected to backend server");
 
-    if (jwt) {
+    if (jwt && jwt !== "authenticated") {
       socket.send(
         JSON.stringify({
           channel: "auth",
@@ -38,13 +38,14 @@ function storeJWT(token) {
 }
 
 function clearJWT() {
+  console.log("Clearing jwt");
   localStorage.removeItem("jwt");
   userField.textContent = "Guest";
 }
 
 socket.onmessage = (event) => {
   const packet = JSON.parse(event.data);
-  if (packet.token) {
+  if (packet.channel === "sys" && packet.token === "jwt") {
     localStorage.setItem("jwt", packet.token);
   }
   // DEBUG LOG
@@ -197,16 +198,19 @@ function handleSystemMessage(message) {
   switch (message.token) {
     case "clear":
       clearOutput();
-      return;
+      break;
     case "authenticated":
       userField.textContent = "Logged in as " + message.data;
-      return;
+      break;
     case "logout":
       clearJWT();
-      return;
+      maskedInput = false;
+      inputField.type = "text";
+      inputField.placeholder = "Enter text here";
+      break;
     case "JWT":
       storeJWT(message.data);
-      return;
+      break;
     default:
       console.log("Unknown system message token:", message.token);
   }

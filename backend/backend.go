@@ -1,8 +1,3 @@
-/* BUGS
- * login returns incorrect password immediately on first try
- * refreshing twice results in logout (browser / extension issue?)
- */
-
 package main
 
 import (
@@ -15,7 +10,6 @@ import (
 	"os"
 	"slices"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -55,8 +49,7 @@ type websocketMessage struct {
 	Data    string `json:"data"`
 }
 
-func main() {
-
+func loadEnv() serverConfig {
 	godotenv.Load()
 
 	platform := os.Getenv("PLATFORM")
@@ -87,9 +80,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Error opening database: %s", err)
 	}
+
 	dbQueries := database.New(dbConn)
 
-	cfg := serverConfig{
+	return serverConfig{
 		Port:           port,
 		DB:             dbQueries,
 		Platform:       platform,
@@ -98,6 +92,11 @@ func main() {
 		ClientsMu:      sync.Mutex{},
 		JWTSecret:      jwtSecret,
 	}
+}
+
+func main() {
+
+	cfg := loadEnv()
 
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -129,7 +128,34 @@ func main() {
 	fmt.Printf("server started on http://localhost:%s\n", cfg.Port)
 	serverErr := srv.ListenAndServe()
 	log.Fatal(serverErr)
+}
 
+func (cfg *serverConfig) closeConnection(wg *sync.WaitGroup, client Client, conn *websocket.Conn, connID string) {
+	cfg.ClientsMu.Lock()
+	if existingClient := cfg.Clients[connID]; existingClient != nil {
+		existingClient.closed = true
+	}
+	delete(cfg.Clients, client.ID)
+	cfg.ClientsMu.Unlock()
+
+	// Close channel safely
+	cfg.ClientsMu.Lock()
+	if client := cfg.Clients[client.ID]; client != nil && !client.closed {
+		select {
+		case <-client.Outbound:
+		// Already closed
+		default:
+			close(client.Outbound)
+		}
+	}
+	cfg.ClientsMu.Unlock()
+
+	wg.Wait()
+
+	cfg.ClientsMu.Lock()
+	delete(cfg.Clients, connID)
+	cfg.ClientsMu.Unlock()
+	conn.Close()
 }
 
 func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request) {
@@ -163,7 +189,7 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 	cfg.ClientsMu.Unlock()
 	log.Printf("[SYS] New WebSocket connection: %s from %s", connID, conn.RemoteAddr())
 
-	// Authentication channel to pass login creds to auth package
+	// Always create fresh AuthChan
 	authChan := make(chan string, 1)
 	client.AuthChan = authChan
 	ctx = context.WithValue(ctx, "authChan", authChan)
@@ -171,45 +197,27 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 	var wg sync.WaitGroup
 	wg.Add(1)
 
-	go func() {
-		defer wg.Done()
-		for msg := range client.Outbound {
-			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-				log.Printf("[SYS] %s Write error: %v", connID, err)
-				break
-			}
-		}
-	}()
+	go cfg.writeMessages(&wg, client, conn)
 
 	// Cleanup connection on close
-	defer func() {
-		cfg.ClientsMu.Lock()
-		if existingClient := cfg.Clients[connID]; existingClient != nil {
-			existingClient.closed = true
+	defer cfg.closeConnection(&wg, *client, conn, connID)
+
+	cfg.handleMessages(ctx, conn, client)
+
+	log.Printf("Connection %s closed", connID)
+}
+
+func (cfg *serverConfig) writeMessages(wg *sync.WaitGroup, client *Client, conn *websocket.Conn) {
+	defer wg.Done()
+	for msg := range client.Outbound {
+		if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+			log.Printf("[SYS] %s Write error: %v", client.ID, err)
+			break
 		}
-		delete(cfg.Clients, client.ID)
-		cfg.ClientsMu.Unlock()
+	}
+}
 
-		// Close channel safely
-		cfg.ClientsMu.Lock()
-		if client := cfg.Clients[client.ID]; client != nil && !client.closed {
-			select {
-			case <-client.Outbound:
-			// Already closed
-			default:
-				close(client.Outbound)
-			}
-		}
-		cfg.ClientsMu.Unlock()
-
-		wg.Wait()
-
-		cfg.ClientsMu.Lock()
-		delete(cfg.Clients, connID)
-		cfg.ClientsMu.Unlock()
-		conn.Close()
-	}()
-
+func (cfg *serverConfig) handleMessages(ctx context.Context, conn *websocket.Conn, client *Client) {
 	// Handle incoming messages
 	for {
 		conn.SetReadDeadline(time.Now().Add(10 * time.Minute))
@@ -226,7 +234,7 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 			continue
 		}
 		// DEV log
-		fmt.Printf("[SYS] %s sent: %s\n", client.ID, params)
+		log.Printf("[DEV] %s sent: %s\n", client.ID, params)
 		var response websocketMessage
 		switch params.Channel {
 		case "sys":
@@ -271,12 +279,12 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 							log.Printf("[SYS] %s failed to marshal", client.ID)
 						}
 						client.Outbound <- byteResponse
-
 					}
 				}
+				continue
 			}
 			select {
-			case authChan <- params.Data:
+			case client.AuthChan <- params.Data:
 				// Success
 				continue
 			default:
@@ -300,76 +308,5 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 			continue
 		}
 		client.Outbound <- byteResponse
-	}
-	log.Printf("Connection %s closed", connID)
-}
-
-type cliCommand struct {
-	name        string
-	description string
-	callback    func(
-		ctx context.Context,
-		client *Client,
-		args []string,
-	) (websocketMessage, error)
-}
-
-// Console command registry
-func (cfg *serverConfig) getConsoleCommands() map[string]cliCommand {
-	return map[string]cliCommand{
-		"clear": {
-			name:        "clear",
-			description: "Clear the screen",
-			callback:    cfg.handleClear,
-		},
-		"help": {
-			name:        "help",
-			description: "Display available commands",
-			callback:    cfg.handleHelp,
-		},
-		"login": {
-			name:        "login",
-			description: "Login to existing user account",
-			callback:    cfg.handleLogin,
-		},
-		"logout": {
-			name:        "logout",
-			description: "Logout from user account",
-			callback:    cfg.handleLogout,
-		},
-		"ping": {
-			name:        "ping",
-			description: "Ping the server",
-			callback:    cfg.handlePing,
-		},
-		"register": {
-			name:        "register",
-			description: "Register a new user account",
-			callback:    cfg.handleRegister,
-		},
-		"shout": {
-			name:        "shout",
-			description: "Broadcast to all clients",
-			callback:    cfg.handleShout,
-		},
-	}
-}
-
-func (cfg *serverConfig) handleConsole(ctx context.Context, _ *websocket.Conn, message string, client *Client) (websocketMessage, error) {
-	authChan, ok := ctx.Value("authChan").(chan string)
-	client.AuthChan = authChan
-	if !ok {
-		return websocketMessage{}, fmt.Errorf("auth channel not found")
-	}
-	cmd := strings.ToLower(strings.Split(message, " ")[0])
-	args := strings.Split(message, " ")[1:]
-
-	response := websocketMessage{}
-
-	command, exists := cfg.getConsoleCommands()[cmd]
-	if exists {
-		return command.callback(ctx, client, args)
-	} else {
-		return response, nil
 	}
 }
