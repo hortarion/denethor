@@ -9,11 +9,20 @@ import (
 	"context"
 )
 
-const resetDB = `-- name: ResetDB :exec
+const resetRefreshTokens = `-- name: ResetRefreshTokens :exec
+DELETE FROM refresh_tokens
+`
+
+func (q *Queries) ResetRefreshTokens(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, resetRefreshTokens)
+	return err
+}
+
+const resetUsers = `-- name: ResetUsers :exec
 DELETE FROM users
 `
 
-func (q *Queries) ResetDB(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, resetDB)
+func (q *Queries) ResetUsers(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, resetUsers)
 	return err
 }

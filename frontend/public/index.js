@@ -1,7 +1,8 @@
 function setupWebSocket() {
   const jwt = localStorage.getItem("jwt");
+  const rft = localStorage.getItem("rft");
   const socket = new WebSocket(
-    `ws://${window.location.hostname}:8080/ws?jwt=${jwt}`,
+    `ws://${window.location.hostname}:8080/ws?jwt=${jwt}&rft=${rft}`,
   );
 
   socket.onopen = () => {
@@ -39,9 +40,14 @@ function storeJWT(token) {
   localStorage.setItem("jwt", token);
 }
 
-function clearJWT() {
-  console.log("Clearing jwt");
+function storeRFT(token) {
+  localStorage.setItem("rft", token);
+}
+
+function clearTokens() {
+  console.log("Clearing jwt & rft");
   localStorage.removeItem("jwt");
+  localStorage.removeItem("rft");
   userField.textContent = "Guest";
 }
 
@@ -205,13 +211,16 @@ function handleSystemMessage(message) {
       userField.textContent = "Logged in as " + message.data;
       break;
     case "logout":
-      clearJWT();
+      clearTokens();
       maskedInput = false;
       inputField.type = "text";
       inputField.placeholder = "Enter text here";
       break;
     case "JWT":
       storeJWT(message.data);
+      break;
+    case "RFT":
+      storeRFT(message.data);
       break;
     default:
       console.log("Unknown system message token:", message.token);

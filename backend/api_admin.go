@@ -8,11 +8,16 @@ func (cfg *serverConfig) handleReset(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Reset is only allowed in dev environment."))
 		return
 	}
-	err := cfg.DB.ResetDB(r.Context())
+	err := cfg.DB.ResetUsers(r.Context())
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Failed to reset the database: " + err.Error()))
+		w.Write([]byte("Failed to reset users: " + err.Error()))
 		return
+	}
+	err = cfg.DB.ResetRefreshTokens(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Failed to reset refresh_tokens: " + err.Error()))
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Database has been reset."))

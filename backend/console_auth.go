@@ -11,6 +11,7 @@ import (
 	"github.com/hortarion/server/internal/database"
 )
 
+// TODO: Update with new authentication logic
 func (cfg *serverConfig) registerUser(ctx context.Context, client *Client, username string) {
 	password := <-client.AuthChan
 	hash, err := auth.HashPassword(password)
@@ -60,6 +61,7 @@ func (cfg *serverConfig) loginUser(ctx context.Context, client *Client, username
 		client.ID = username
 		cfg.sysAuthenticated(client)
 		cfg.sysJWT(ctx, client)
+		cfg.sysRFT(ctx, client)
 		log.Printf("[SYS] %s logged in", client.ID)
 	}
 
@@ -151,7 +153,9 @@ func (cfg *serverConfig) handleLogin(ctx context.Context, client *Client, args [
 
 func (cfg *serverConfig) handleLogout(ctx context.Context, client *Client, args []string) (websocketMessage, error) {
 	newID := uuid.New().String()
-	log.Printf("%s\n", client.ID)
+
+	cfg.handlerRevoke(ctx, client)
+
 	// Reset authentication state
 	cfg.ClientsMu.Lock()
 	defer cfg.ClientsMu.Unlock()
@@ -165,24 +169,16 @@ func (cfg *serverConfig) handleLogout(ctx context.Context, client *Client, args 
 	client.AuthChan = make(chan string, 1)
 	cfg.Clients[newID] = client
 
-	// Clear JWT
-	response := websocketMessage{
-		Channel: "sys",
-		Token:   "logout",
-		Data:    "",
-	}
+	cfg.sysLogout(client)
 
-	byteResponse, _ := json.Marshal(response)
-	client.Outbound <- byteResponse
-
-	clearResponse := websocketMessage{
-		Channel: "sys",
-		Token:   "clear",
-		Data:    "",
-	}
-
-	byteClearResponse, _ := json.Marshal(clearResponse)
-	client.Outbound <- byteClearResponse
+	cfg.marshalAndSend(
+		websocketMessage{
+			Channel: "sys",
+			Token:   "clear",
+			Data:    "",
+		},
+		client,
+	)
 
 	return websocketMessage{
 		Channel: "console",

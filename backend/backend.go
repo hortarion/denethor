@@ -130,7 +130,8 @@ func main() {
 	log.Fatal(serverErr)
 }
 
-func (cfg *serverConfig) createClient(ctx context.Context, conn *websocket.Conn, connID, jwtToken string) *Client {
+// TODO: add refreshToken validation
+func (cfg *serverConfig) createClient(ctx context.Context, conn *websocket.Conn, connID, jwtToken, refreshToken string) *Client {
 	outbound := make(chan []byte)
 
 	client := &Client{
@@ -153,8 +154,9 @@ func (cfg *serverConfig) createClient(ctx context.Context, conn *websocket.Conn,
 }
 
 func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request) {
-	// Fetch jwtToken
+	// Fetch tokens
 	jwtToken := r.URL.Query().Get("jwt")
+	refreshToken := r.URL.Query().Get("rft")
 
 	// Create ID and associate with context
 	connID := uuid.New().String()
@@ -170,7 +172,7 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 	// Set deadlines
 	conn.SetReadDeadline(time.Now().Add(10 * time.Minute))
 
-	client := cfg.createClient(ctx, conn, connID, jwtToken)
+	client := cfg.createClient(ctx, conn, connID, jwtToken, refreshToken)
 
 	// Add connection to client map
 	cfg.ClientsMu.Lock()

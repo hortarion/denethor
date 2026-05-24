@@ -1,6 +1,10 @@
 package main
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+	"log"
+)
 
 func getClientFromContext(ctx context.Context) *Client {
 	if client, ok := ctx.Value("client").(*Client); ok {
@@ -19,4 +23,13 @@ func (cfg *serverConfig) updateClientID(oldID, newID string) {
 		client.IsAuthed = true
 		cfg.Clients[newID] = client
 	}
+}
+
+func (cfg *serverConfig) marshalAndSend(websocketMessage websocketMessage, client *Client) {
+	byteMessage, err := json.Marshal(websocketMessage)
+	if err != nil {
+		log.Printf("[SYS] %s failed to marshal system message", client.ID)
+		return
+	}
+	client.Outbound <- byteMessage
 }
