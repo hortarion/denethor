@@ -17,6 +17,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/hortarion/server/internal/apps"
 	"github.com/hortarion/server/internal/auth"
 	"github.com/hortarion/server/internal/database"
 
@@ -312,6 +313,12 @@ func (cfg *serverConfig) handleMessages(ctx context.Context, conn *websocket.Con
 				response.Channel = "auth"
 				response.Data = ""
 			}
+		case "app":
+			appResponse, err := apps.Apps(params.Token, params.Data)
+			if err != nil {
+				log.Printf("[APP] %s app launcher err: %s", client.ID, err)
+			}
+			response = websocketMessage(appResponse)
 		default:
 			response = websocketMessage{}
 		}

@@ -21,6 +21,11 @@ type cliCommand struct {
 // Console command registry
 func (cfg *serverConfig) getConsoleCommands() map[string]cliCommand {
 	return map[string]cliCommand{
+		"app": {
+			name:        "app",
+			description: "App launcher",
+			callback:    nil,
+		},
 		"clear": {
 			name:        "clear",
 			description: "Clear the screen",

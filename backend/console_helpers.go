@@ -3,18 +3,24 @@ package main
 import (
 	"context"
 	"fmt"
-	"strings"
+	"sort"
 )
 
 func (cfg *serverConfig) handleHelp(ctx context.Context, client *Client, args []string) (websocketMessage, error) {
-	builder := strings.Builder{}
-	for _, command := range cfg.getConsoleCommands() {
-		builder.WriteString(fmt.Sprintf("%s - %s\n", command.name, command.description))
+	commands := cfg.getConsoleCommands()
+	var cmdKeys = make([]string, 0, len(commands))
+	for k := range commands {
+		cmdKeys = append(cmdKeys, k)
+	}
+	sort.Strings(cmdKeys)
+	var helpMessage string
+	for _, key := range cmdKeys {
+		helpMessage += fmt.Sprintf("	> %s - %s\n", commands[key].name, commands[key].description)
 	}
 	response := websocketMessage{
 		Channel: "console",
 		Token:   "",
-		Data:    builder.String(),
+		Data:    helpMessage,
 	}
 	return response, nil
 }

@@ -156,17 +156,24 @@ function appendToOutput(text) {
 async function handleOutputUpdate() {
   const lastLine = outputLines[outputLines.length - 1];
   const regexDenethor = /\[.*?\] Denethor: /;
+  const regexUser = /\[.*?\] You: /;
+  const regexApp = /\[.*?\] App: /;
   if (regexDenethor.test(lastLine)) {
     return;
   }
   const regex = /\[.*?\] You: /;
-  if (regex.test(lastLine)) {
-    const commands = lastLine.split(/\[.*?\] You: /)[1];
+  if (regexUser.test(lastLine)) {
+    const commands = lastLine.split(regexUser)[1];
     const message = {
       channel: "console",
       token: "",
       data: commands,
     };
+    if (commands === "app") {
+      socket.send(
+        JSON.stringify({ channel: "app", token: "launch", data: "" }),
+      );
+    }
     socket.send(JSON.stringify(message));
   }
 }
@@ -186,6 +193,12 @@ function handleInputUpdate(packet) {
         printToPage(packet.data);
         return;
       }
+    case "app":
+      if (packet.data.length === 0) {
+        return;
+      }
+      printToPage(packet.data);
+      break;
     case "console":
       if (packet.data.length === 0) {
         return;

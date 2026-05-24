@@ -1,6 +1,12 @@
-package app
+package apps
 
 import "fmt"
+
+type websocketMessage struct {
+	Channel string `json:"channel"`
+	Token   string `json:"token"`
+	Data    string `json:"data"`
+}
 
 var serverContent = make(map[int]string)
 
@@ -26,4 +32,15 @@ func InternalRegistry() {
 	}
 }
 
-func apps() {}
+func Apps(token, data string) (websocketMessage, error) {
+	var response websocketMessage
+	switch token {
+	case "launch":
+		response = websocketMessage{
+			Channel: "app",
+			Token:   "",
+			Data:    "not implemented - this command will start app launcher",
+		}
+	}
+	return response, nil
+}
