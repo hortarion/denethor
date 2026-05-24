@@ -1,4 +1,4 @@
-package internalRegistry
+package app
 
 import "fmt"
 
@@ -18,10 +18,12 @@ func returnContent() []string {
 
 func InternalRegistry() {
 	registerContent("rockPaperScissors")
-	registerContent("notImplemented")
+	registerContent("more to come")
 	content := returnContent()
 	fmt.Println("Registered applications:")
-	for _, item := range content {
-		fmt.Println(">>", item)
+	for idx, item := range content {
+		fmt.Println(idx, "-", item)
 	}
 }
+
+func apps() {}

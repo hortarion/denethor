@@ -218,6 +218,7 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 
 	// Cleanup connection on close
 	defer cfg.closeConnection(&wg, *client, conn, connID)
+	defer cfg.DB.CleanupExpiredTokens(ctx)
 
 	cfg.handleMessages(ctx, conn, client)
 
