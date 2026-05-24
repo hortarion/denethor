@@ -1,6 +1,12 @@
 function setupWebSocket() {
-  const jwt = localStorage.getItem("jwt");
-  const rft = localStorage.getItem("rft");
+  const jwt = document.cookie
+    .split("; ")
+    .find((row) => row.startsWith("jwt="))
+    ?.split("=")[1];
+  const rft = document.cookie
+    .split("; ")
+    .find((row) => row.startsWith("rft="))
+    ?.split("=")[1];
   const socket = new WebSocket(
     `ws://${window.location.hostname}:8080/ws?jwt=${jwt}&rft=${rft}`,
   );
@@ -27,17 +33,19 @@ function reconnectWebSocket() {
 }
 
 function storeJWT(token) {
-  localStorage.setItem("jwt", token);
+  let date = new Date();
+  document.cookie = `jwt=${token}; expires=${new Date(date.setMonth(date.getMonth() + 1))}; path=/`;
 }
 
 function storeRFT(token) {
-  localStorage.setItem("rft", token);
+  let date = new Date();
+  document.cookie = `rft=${token}; expires=${new Date(date.setMonth(date.getMonth() + 6))}; path=/`;
 }
 
 function clearTokens() {
   console.log("Clearing jwt & rft");
-  localStorage.removeItem("jwt");
-  localStorage.removeItem("rft");
+  document.cookie = `jwt=; expires=${new Date()}; path=/`;
+  document.cookie = `rft=; expires=${new Date()}; path=/`;
   userField.textContent = "Guest";
 }
 
