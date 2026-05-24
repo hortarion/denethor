@@ -87,7 +87,14 @@ func (cfg *serverConfig) sysRFT(ctx context.Context, client *Client) {
 		Data:    RFtoken,
 	}
 	cfg.marshalAndSend(response, client)
+}
 
+func (cfg *serverConfig) getUserByRefreshToken(ctx context.Context, refreshToken string) (database.User, error) {
+	user, err := cfg.DB.GetUserFromRefreshToken(ctx, refreshToken)
+	if err != nil {
+		return database.User{}, err
+	}
+	return user, nil
 }
 
 func (cfg *serverConfig) handlerRevoke(ctx context.Context, client *Client) {

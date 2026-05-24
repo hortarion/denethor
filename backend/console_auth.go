@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 
@@ -11,7 +10,6 @@ import (
 	"github.com/hortarion/server/internal/database"
 )
 
-// TODO: Update with new authentication logic
 func (cfg *serverConfig) registerUser(ctx context.Context, client *Client, username string) {
 	password := <-client.AuthChan
 	hash, err := auth.HashPassword(password)
@@ -29,14 +27,16 @@ func (cfg *serverConfig) registerUser(ctx context.Context, client *Client, usern
 	}
 	response := websocketMessage{
 		Channel: "console",
-		Data:    fmt.Sprintf("%s has been registered", user.Username),
+		Data:    fmt.Sprintf("%s has been registered and logged in", user.Username),
 	}
-	byteResponse, err := json.Marshal(response)
-	if err != nil {
-		log.Printf("[REGIST] error: %s", err)
-		return
-	}
-	client.Outbound <- byteResponse
+	client.IsAuthed = true
+	client.ID = username
+	cfg.sysAuthenticated(client)
+	cfg.sysJWT(ctx, client)
+	cfg.sysRFT(ctx, client)
+	cfg.marshalAndSend(response, client)
+	cfg.marshalAndSend(websocketMessage{Channel: "auth"}, client)
+	log.Printf("[SYS] %s logged in", client.ID)
 }
 
 func (cfg *serverConfig) loginUser(ctx context.Context, client *Client, username string) {
@@ -65,12 +65,7 @@ func (cfg *serverConfig) loginUser(ctx context.Context, client *Client, username
 		log.Printf("[SYS] %s logged in", client.ID)
 	}
 
-	byteResponse, err := json.Marshal(response)
-	if err != nil {
-		log.Printf("[LOGIN] error: %s", err)
-		return
-	}
-	client.Outbound <- byteResponse
+	cfg.marshalAndSend(response, client)
 }
 
 func (cfg *serverConfig) handleRegister(ctx context.Context, client *Client, args []string) (websocketMessage, error) {

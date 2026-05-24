@@ -130,7 +130,6 @@ func main() {
 	log.Fatal(serverErr)
 }
 
-// TODO: add refreshToken validation
 func (cfg *serverConfig) createClient(ctx context.Context, conn *websocket.Conn, connID, jwtToken, refreshToken string) *Client {
 	outbound := make(chan []byte)
 
@@ -140,13 +139,19 @@ func (cfg *serverConfig) createClient(ctx context.Context, conn *websocket.Conn,
 		Outbound: outbound,
 		IsAuthed: false,
 	}
+	var user database.User
 	userID, err := auth.ValidateJWT(jwtToken, cfg.JWTSecret)
 	if err != nil {
-		return client
-	}
-	user, err := cfg.DB.GetUserByID(ctx, userID)
-	if err != nil {
-		return client
+		// Check for refreshToken
+		user, err = cfg.getUserByRefreshToken(ctx, refreshToken)
+		if err != nil {
+			return client
+		}
+	} else {
+		user, err = cfg.DB.GetUserByID(ctx, userID)
+		if err != nil {
+			return client
+		}
 	}
 	client.ID = user.Username
 	client.IsAuthed = true
@@ -189,6 +194,12 @@ func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request
 	wg.Add(1)
 
 	go cfg.writeMessages(&wg, client, conn)
+
+	// Send new JWT in case of login via refreshToken
+	user, err := cfg.DB.GetUserByUsername(ctx, client.ID)
+	if user.Username == client.ID {
+		cfg.sysJWT(ctx, client)
+	}
 
 	// Update frontend with user credentials
 	if client.IsAuthed {

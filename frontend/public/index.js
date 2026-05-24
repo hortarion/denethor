@@ -7,16 +7,6 @@ function setupWebSocket() {
 
   socket.onopen = () => {
     console.log("Connected to backend server");
-
-    /* if (jwt && jwt !== "authenticated") {
-      socket.send(
-        JSON.stringify({
-          channel: "auth",
-          token: "jwt",
-          data: jwt,
-        }),
-      );
-      } */
     const message = {
       channel: "sys",
       token: "",
