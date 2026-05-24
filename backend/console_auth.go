@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/google/uuid"
 	"github.com/hortarion/server/internal/auth"
 	"github.com/hortarion/server/internal/database"
 )
@@ -149,14 +150,20 @@ func (cfg *serverConfig) handleLogin(ctx context.Context, client *Client, args [
 }
 
 func (cfg *serverConfig) handleLogout(ctx context.Context, client *Client, args []string) (websocketMessage, error) {
+	newID := uuid.New().String()
+	log.Printf("%s\n", client.ID)
 	// Reset authentication state
 	cfg.ClientsMu.Lock()
-	if existingClient, exists := cfg.Clients[client.ID]; exists {
-		existingClient.IsAuthed = false
-		// Create new auth channel to clear any pending auth state
-		existingClient.AuthChan = make(chan string, 1)
+	defer cfg.ClientsMu.Unlock()
+	_, exists := cfg.Clients[client.ID]
+	if exists {
+		delete(cfg.Clients, client.ID)
 	}
-	cfg.ClientsMu.Unlock()
+
+	client.ID = newID
+	client.IsAuthed = false
+	client.AuthChan = make(chan string, 1)
+	cfg.Clients[newID] = client
 
 	// Clear JWT
 	response := websocketMessage{

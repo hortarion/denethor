@@ -9,7 +9,6 @@ func getClientFromContext(ctx context.Context) *Client {
 	return nil
 }
 
-// how will this affect client channels?
 func (cfg *serverConfig) updateClientID(oldID, newID string) {
 	cfg.ClientsMu.Lock()
 	defer cfg.ClientsMu.Unlock()

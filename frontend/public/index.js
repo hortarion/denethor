@@ -1,11 +1,13 @@
 function setupWebSocket() {
   const jwt = localStorage.getItem("jwt");
-  const socket = new WebSocket(`ws://${window.location.hostname}:8080/ws`);
+  const socket = new WebSocket(
+    `ws://${window.location.hostname}:8080/ws?jwt=${jwt}`,
+  );
 
   socket.onopen = () => {
     console.log("Connected to backend server");
 
-    if (jwt && jwt !== "authenticated") {
+    /* if (jwt && jwt !== "authenticated") {
       socket.send(
         JSON.stringify({
           channel: "auth",
@@ -13,7 +15,7 @@ function setupWebSocket() {
           data: jwt,
         }),
       );
-    }
+      } */
     const message = {
       channel: "sys",
       token: "",

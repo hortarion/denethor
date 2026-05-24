@@ -130,6 +130,87 @@ func main() {
 	log.Fatal(serverErr)
 }
 
+func (cfg *serverConfig) createClient(ctx context.Context, conn *websocket.Conn, connID, jwtToken string) *Client {
+	outbound := make(chan []byte)
+
+	client := &Client{
+		ID:       connID,
+		Conn:     conn,
+		Outbound: outbound,
+		IsAuthed: false,
+	}
+	userID, err := auth.ValidateJWT(jwtToken, cfg.JWTSecret)
+	if err != nil {
+		return client
+	}
+	user, err := cfg.DB.GetUserByID(ctx, userID)
+	if err != nil {
+		return client
+	}
+	client.ID = user.Username
+	client.IsAuthed = true
+	return client
+}
+
+func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request) {
+	// Fetch jwtToken
+	jwtToken := r.URL.Query().Get("jwt")
+
+	// Create ID and associate with context
+	connID := uuid.New().String()
+	ctx := context.WithValue(r.Context(), "connID", connID)
+
+	// Establish WS connection
+	conn, err := cfg.Upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Println("Upgrade error:", err)
+		return
+	}
+
+	// Set deadlines
+	conn.SetReadDeadline(time.Now().Add(10 * time.Minute))
+
+	client := cfg.createClient(ctx, conn, connID, jwtToken)
+
+	// Add connection to client map
+	cfg.ClientsMu.Lock()
+	cfg.Clients[connID] = client
+	cfg.ClientsMu.Unlock()
+	log.Printf("[SYS] New WebSocket connection: %s from %s", connID, conn.RemoteAddr())
+
+	// Always create fresh AuthChan
+	authChan := make(chan string, 1)
+	client.AuthChan = authChan
+	ctx = context.WithValue(ctx, "authChan", authChan)
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go cfg.writeMessages(&wg, client, conn)
+
+	// Update frontend with user credentials
+	if client.IsAuthed {
+		message := websocketMessage{
+			Channel: "sys",
+			Token:   "authenticated",
+			Data:    client.ID,
+		}
+		byteMessage, err := json.Marshal(message)
+		if err != nil {
+			log.Println("[SYS] Failed to authenticate with client")
+			return
+		}
+		client.Outbound <- byteMessage
+	}
+
+	// Cleanup connection on close
+	defer cfg.closeConnection(&wg, *client, conn, connID)
+
+	cfg.handleMessages(ctx, conn, client)
+
+	log.Printf("Connection %s closed", connID)
+}
+
 func (cfg *serverConfig) closeConnection(wg *sync.WaitGroup, client Client, conn *websocket.Conn, connID string) {
 	cfg.ClientsMu.Lock()
 	if existingClient := cfg.Clients[connID]; existingClient != nil {
@@ -156,55 +237,6 @@ func (cfg *serverConfig) closeConnection(wg *sync.WaitGroup, client Client, conn
 	delete(cfg.Clients, connID)
 	cfg.ClientsMu.Unlock()
 	conn.Close()
-}
-
-func (cfg *serverConfig) handleConnection(w http.ResponseWriter, r *http.Request) {
-	// Create ID and associate with context
-	connID := uuid.New().String()
-	ctx := context.WithValue(r.Context(), "connID", connID)
-
-	// Establish WS connection
-	conn, err := cfg.Upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Println("Upgrade error:", err)
-		return
-	}
-
-	// Set deadlines
-	conn.SetReadDeadline(time.Now().Add(10 * time.Minute))
-
-	// Outbound channel
-	outbound := make(chan []byte)
-
-	client := &Client{
-		ID:       connID,
-		Conn:     conn,
-		Outbound: outbound,
-		IsAuthed: false,
-	}
-
-	// Add connection to client map
-	cfg.ClientsMu.Lock()
-	cfg.Clients[connID] = client
-	cfg.ClientsMu.Unlock()
-	log.Printf("[SYS] New WebSocket connection: %s from %s", connID, conn.RemoteAddr())
-
-	// Always create fresh AuthChan
-	authChan := make(chan string, 1)
-	client.AuthChan = authChan
-	ctx = context.WithValue(ctx, "authChan", authChan)
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-
-	go cfg.writeMessages(&wg, client, conn)
-
-	// Cleanup connection on close
-	defer cfg.closeConnection(&wg, *client, conn, connID)
-
-	cfg.handleMessages(ctx, conn, client)
-
-	log.Printf("Connection %s closed", connID)
 }
 
 func (cfg *serverConfig) writeMessages(wg *sync.WaitGroup, client *Client, conn *websocket.Conn) {
@@ -250,39 +282,6 @@ func (cfg *serverConfig) handleMessages(ctx context.Context, conn *websocket.Con
 				}
 			}
 		case "auth":
-			if params.Token == "jwt" {
-				jwtToken := params.Data
-
-				userID, err := auth.ValidateJWT(jwtToken, cfg.JWTSecret)
-				if err != nil {
-					log.Printf("[SYS] %s invalid JWT", client.ID)
-				} else {
-					user, err := cfg.DB.GetUserByID(ctx, userID)
-					if err != nil {
-						log.Printf("[SYS] %s JWT not connected to known user", client.ID)
-					} else {
-						// Update client with authenticated user
-						cfg.ClientsMu.Lock()
-						delete(cfg.Clients, client.ID)
-						client.IsAuthed = true
-						client.ID = user.Username
-						cfg.Clients[user.Username] = client
-						cfg.ClientsMu.Unlock()
-
-						response := websocketMessage{
-							Channel: "sys",
-							Token:   "authenticated",
-							Data:    user.Username,
-						}
-						byteResponse, err := json.Marshal(response)
-						if err != nil {
-							log.Printf("[SYS] %s failed to marshal", client.ID)
-						}
-						client.Outbound <- byteResponse
-					}
-				}
-				continue
-			}
 			select {
 			case client.AuthChan <- params.Data:
 				// Success
