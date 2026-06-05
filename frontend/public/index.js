@@ -1,3 +1,8 @@
+// rename handleOutputUpdate() to handleConsoleUpdate()
+// create handleAppUpdate()
+// add state var activeProgram (console, app, etc)
+// route messages to activeProgram method
+
 function setupWebSocket() {
   const jwt = document.cookie
     .split("; ")
@@ -161,7 +166,9 @@ async function handleOutputUpdate() {
   if (regexDenethor.test(lastLine)) {
     return;
   }
-  const regex = /\[.*?\] You: /;
+  if (regexApp.test(lastLine)) {
+    return;
+  }
   if (regexUser.test(lastLine)) {
     const commands = lastLine.split(regexUser)[1];
     const message = {
@@ -173,6 +180,7 @@ async function handleOutputUpdate() {
       socket.send(
         JSON.stringify({ channel: "app", token: "launch", data: "" }),
       );
+      return;
     }
     socket.send(JSON.stringify(message));
   }

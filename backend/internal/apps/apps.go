@@ -41,6 +41,12 @@ func Apps(token, data string) (websocketMessage, error) {
 			Token:   "",
 			Data:    "not implemented - this command will start app launcher",
 		}
+	case "back":
+		response = websocketMessage{
+			Channel: "app",
+			Token:   "",
+			Data:    "returning back to console",
+		}
 	}
 	return response, nil
 }
