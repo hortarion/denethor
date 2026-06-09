@@ -4,6 +4,3 @@
 
 # backend/sql/
 - create app table
-
-# app
-- route input depending on active_app

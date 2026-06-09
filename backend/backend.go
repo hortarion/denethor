@@ -302,9 +302,8 @@ func (cfg *serverConfig) handleMessages(ctx context.Context, conn *websocket.Con
 			}
 			client.activeApp = app
 			response = websocketMessage(appResponse)
-		}
-		// Default active_app console
-		if client.activeApp == "console" {
+		} else {
+			// Default active_app == "console"
 			switch params.Channel {
 			case "sys":
 				log.Printf("[SYS] received: %s", message)
@@ -336,22 +335,33 @@ func (cfg *serverConfig) handleMessages(ctx context.Context, conn *websocket.Con
 					response.Data = ""
 				}
 			case "app":
-				log.Printf("[SYS] %s switching to %s", client.ID, client.activeApp)
-				client.activeApp = "appLauncher"
-				_, err := cfg.DB.ChangeActiveApp(ctx, database.ChangeActiveAppParams{Username: client.ID, ActiveApp: sql.NullString{String: client.activeApp, Valid: true}})
-				if err != nil {
-					log.Printf("[SYS] %s failed to change active app", client.ID)
-					continue
-				}
-				response = websocketMessage{
-					Channel: "console",
-					Token:   "",
-					Data:    "opening app launcher",
+				if client.IsAuthed {
+					log.Printf("[SYS] %s switching to %s", client.ID, client.activeApp)
+					client.activeApp = "appLauncher"
+					_, err := cfg.DB.ChangeActiveApp(ctx, database.ChangeActiveAppParams{Username: client.ID, ActiveApp: sql.NullString{String: client.activeApp, Valid: true}})
+					if err != nil {
+						log.Printf("[SYS] %s failed to change active app", client.ID)
+						continue
+					}
+					response = websocketMessage{
+						Channel: "console",
+						Token:   "",
+						Data:    "opening app launcher",
+					}
+				} else {
+					response = websocketMessage{
+						Channel: "console",
+						Token:   "",
+						Data:    "you need to be logged in to use the App Launcher",
+					}
 				}
 			default:
 				response = websocketMessage{}
 			}
 		}
+
+		// DEV log
+		log.Printf("[DEV] response.data: %s\n", response.Data)
 		byteResponse, err := json.Marshal(response)
 		if err != nil {
 			log.Printf("[SYS] %s failed to marshal JSON: %s", client.ID, err)

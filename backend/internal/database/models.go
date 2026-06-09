@@ -11,6 +11,13 @@ import (
 	"github.com/google/uuid"
 )
 
+type App struct {
+	ID        uuid.UUID
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	AppName   string
+}
+
 type RefreshToken struct {
 	Token     string
 	CreatedAt time.Time

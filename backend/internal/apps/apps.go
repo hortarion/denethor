@@ -36,7 +36,7 @@ func AppLauncher(_, token, data string) (websocketMessage, string, error) {
 	app := "appLauncher"
 	var response websocketMessage
 	// DEV log
-	fmt.Printf("[DEV] APP received: %s, %s\n", token, data)
+	fmt.Printf("[DEV] APP received token: %s, data: %s\n", token, data)
 	switch data {
 	case "launch":
 		response = websocketMessage{
@@ -47,7 +47,7 @@ func AppLauncher(_, token, data string) (websocketMessage, string, error) {
 	case "back":
 		response = websocketMessage{
 			Channel: "app",
-			Token:   "back",
+			Token:   "",
 			Data:    "returning back to console",
 		}
 		app = "console"
@@ -55,7 +55,7 @@ func AppLauncher(_, token, data string) (websocketMessage, string, error) {
 		response = websocketMessage{
 			Channel: "app",
 			Token:   "",
-			Data:    "App launcher help message not implemented",
+			Data:    "App Launcher help message not implemented",
 		}
 	}
 	return response, app, nil
