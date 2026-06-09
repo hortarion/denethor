@@ -1,8 +1,3 @@
-// rename handleOutputUpdate() to handleConsoleUpdate()
-// create handleAppUpdate()
-// add state var activeProgram (console, app, etc)
-// route messages to activeProgram method
-
 function setupWebSocket() {
   const jwt = document.cookie
     .split("; ")
@@ -177,9 +172,7 @@ async function handleOutputUpdate() {
       data: commands,
     };
     if (commands === "app") {
-      socket.send(
-        JSON.stringify({ channel: "app", token: "launch", data: "" }),
-      );
+      socket.send(JSON.stringify({ channel: "app", token: "", data: "" }));
       return;
     }
     socket.send(JSON.stringify(message));

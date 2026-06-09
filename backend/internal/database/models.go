@@ -27,4 +27,5 @@ type User struct {
 	Username       string
 	HashedPassword string
 	DeletedAt      sql.NullTime
+	ActiveApp      sql.NullString
 }

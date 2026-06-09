@@ -7,9 +7,36 @@ package database
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
 )
+
+const changeActiveApp = `-- name: ChangeActiveApp :one
+UPDATE users SET active_app = $2, updated_at = NOW()
+WHERE username = $1
+RETURNING id, created_at, updated_at, username, hashed_password, deleted_at, active_app
+`
+
+type ChangeActiveAppParams struct {
+	Username  string
+	ActiveApp sql.NullString
+}
+
+func (q *Queries) ChangeActiveApp(ctx context.Context, arg ChangeActiveAppParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, changeActiveApp, arg.Username, arg.ActiveApp)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Username,
+		&i.HashedPassword,
+		&i.DeletedAt,
+		&i.ActiveApp,
+	)
+	return i, err
+}
 
 const checkUserByName = `-- name: CheckUserByName :one
 SELECT EXISTS(SELECT 1 FROM users WHERE username = $1)
@@ -31,7 +58,7 @@ VALUES (
     $1,
     $2
     )
-RETURNING id, created_at, updated_at, username, hashed_password, deleted_at
+RETURNING id, created_at, updated_at, username, hashed_password, deleted_at, active_app
 `
 
 type CreateUserParams struct {
@@ -49,14 +76,15 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Username,
 		&i.HashedPassword,
 		&i.DeletedAt,
+		&i.ActiveApp,
 	)
 	return i, err
 }
 
 const deleteUser = `-- name: DeleteUser :one
-UPDATE users SET deleted_at = NOW()
+UPDATE users SET deleted_at = NOW(), updated_at = NOW()
 WHERE id = $1
-RETURNING id, created_at, updated_at, username, hashed_password, deleted_at
+RETURNING id, created_at, updated_at, username, hashed_password, deleted_at, active_app
 `
 
 func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) (User, error) {
@@ -69,12 +97,13 @@ func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.Username,
 		&i.HashedPassword,
 		&i.DeletedAt,
+		&i.ActiveApp,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, created_at, updated_at, username, hashed_password, deleted_at FROM users
+SELECT id, created_at, updated_at, username, hashed_password, deleted_at, active_app FROM users
 WHERE id = $1
 `
 
@@ -88,12 +117,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.Username,
 		&i.HashedPassword,
 		&i.DeletedAt,
+		&i.ActiveApp,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, created_at, updated_at, username, hashed_password, deleted_at FROM users
+SELECT id, created_at, updated_at, username, hashed_password, deleted_at, active_app FROM users
 WHERE username = $1
 `
 
@@ -107,6 +137,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.Username,
 		&i.HashedPassword,
 		&i.DeletedAt,
+		&i.ActiveApp,
 	)
 	return i, err
 }

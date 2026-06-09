@@ -32,9 +32,12 @@ func InternalRegistry() {
 	}
 }
 
-func Apps(token, data string) (websocketMessage, error) {
+func AppLauncher(_, token, data string) (websocketMessage, string, error) {
+	app := "appLauncher"
 	var response websocketMessage
-	switch token {
+	// DEV log
+	fmt.Printf("[DEV] APP received: %s, %s\n", token, data)
+	switch data {
 	case "launch":
 		response = websocketMessage{
 			Channel: "app",
@@ -44,9 +47,16 @@ func Apps(token, data string) (websocketMessage, error) {
 	case "back":
 		response = websocketMessage{
 			Channel: "app",
-			Token:   "",
+			Token:   "back",
 			Data:    "returning back to console",
 		}
+		app = "console"
+	case "help":
+		response = websocketMessage{
+			Channel: "app",
+			Token:   "",
+			Data:    "App launcher help message not implemented",
+		}
 	}
-	return response, nil
+	return response, app, nil
 }

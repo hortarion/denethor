@@ -36,12 +36,13 @@ type serverConfig struct {
 }
 
 type Client struct {
-	ID       string
-	Conn     *websocket.Conn
-	Outbound chan []byte
-	AuthChan chan string
-	IsAuthed bool
-	closed   bool
+	ID        string
+	Conn      *websocket.Conn
+	Outbound  chan []byte
+	AuthChan  chan string
+	IsAuthed  bool
+	closed    bool
+	activeApp string
 }
 
 type websocketMessage struct {
@@ -135,10 +136,11 @@ func (cfg *serverConfig) createClient(ctx context.Context, conn *websocket.Conn,
 	outbound := make(chan []byte)
 
 	client := &Client{
-		ID:       connID,
-		Conn:     conn,
-		Outbound: outbound,
-		IsAuthed: false,
+		ID:        connID,
+		Conn:      conn,
+		Outbound:  outbound,
+		IsAuthed:  false,
+		activeApp: "console",
 	}
 	var user database.User
 	userID, err := auth.ValidateJWT(jwtToken, cfg.JWTSecret)
@@ -156,6 +158,7 @@ func (cfg *serverConfig) createClient(ctx context.Context, conn *websocket.Conn,
 	}
 	client.ID = user.Username
 	client.IsAuthed = true
+	client.activeApp = user.ActiveApp.String
 	return client
 }
 
@@ -283,50 +286,79 @@ func (cfg *serverConfig) handleMessages(ctx context.Context, conn *websocket.Con
 		// DEV log
 		log.Printf("[DEV] %s sent: %s\n", client.ID, params)
 		var response websocketMessage
-		switch params.Channel {
-		case "sys":
-			log.Printf("[SYS] received: %s", message)
-		case "console":
-			response, err = cfg.handleConsole(ctx, conn, params.Data, client)
-			if err != nil {
-				log.Printf("[SYS] %s Console: %v", client.ID, err)
-				response = websocketMessage{
-					Channel: "console",
-					Token:   "error",
-					Data:    err.Error(),
-				}
-			}
-		case "auth":
-			select {
-			case client.AuthChan <- params.Data:
-				// Success
-				continue
-			default:
-				log.Printf("[SYS] %s auth channel full", client.ID)
-				response = websocketMessage{
-					Channel: "auth",
-					Token:   "error",
-					Data:    "auth channel full",
-				}
-			}
-			if response.Channel == "" {
-				response.Channel = "auth"
-				response.Data = ""
-			}
-		case "app":
-			appResponse, err := apps.Apps(params.Token, params.Data)
+
+		// Routing websocketMessage to active_app
+		if client.activeApp == "appLauncher" {
+			appResponse, app, err := apps.AppLauncher(params.Channel, params.Token, params.Data)
 			if err != nil {
 				log.Printf("[APP] %s app launcher err: %s", client.ID, err)
 			}
+			if app != client.activeApp {
+				client.activeApp = app
+				_, err := cfg.DB.ChangeActiveApp(ctx, database.ChangeActiveAppParams{Username: client.ID, ActiveApp: sql.NullString{String: app, Valid: true}})
+				if err != nil {
+					log.Printf("[SYS] %s failed to switch to app: %s", client.ID, app)
+				}
+			}
+			client.activeApp = app
 			response = websocketMessage(appResponse)
-		default:
-			response = websocketMessage{}
+		}
+		// Default active_app console
+		if client.activeApp == "console" {
+			switch params.Channel {
+			case "sys":
+				log.Printf("[SYS] received: %s", message)
+			case "console":
+				response, err = cfg.handleConsole(ctx, conn, params.Data, client)
+				if err != nil {
+					log.Printf("[SYS] %s Console: %v", client.ID, err)
+					response = websocketMessage{
+						Channel: "console",
+						Token:   "error",
+						Data:    err.Error(),
+					}
+				}
+			case "auth":
+				select {
+				case client.AuthChan <- params.Data:
+					// Success
+					continue
+				default:
+					log.Printf("[SYS] %s auth channel full", client.ID)
+					response = websocketMessage{
+						Channel: "auth",
+						Token:   "error",
+						Data:    "auth channel full",
+					}
+				}
+				if response.Channel == "" {
+					response.Channel = "auth"
+					response.Data = ""
+				}
+			case "app":
+				log.Printf("[SYS] %s switching to %s", client.ID, client.activeApp)
+				client.activeApp = "appLauncher"
+				_, err := cfg.DB.ChangeActiveApp(ctx, database.ChangeActiveAppParams{Username: client.ID, ActiveApp: sql.NullString{String: client.activeApp, Valid: true}})
+				if err != nil {
+					log.Printf("[SYS] %s failed to change active app", client.ID)
+					continue
+				}
+				response = websocketMessage{
+					Channel: "console",
+					Token:   "",
+					Data:    "opening app launcher",
+				}
+			default:
+				response = websocketMessage{}
+			}
 		}
 		byteResponse, err := json.Marshal(response)
 		if err != nil {
 			log.Printf("[SYS] %s failed to marshal JSON: %s", client.ID, err)
 			continue
 		}
+		// DEV log
+		log.Printf("[DEV] active_app: %s\n", client.activeApp)
 		client.Outbound <- byteResponse
 	}
 }
