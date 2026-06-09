@@ -19,6 +19,11 @@ func (cfg *serverConfig) handleReset(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Failed to reset refresh_tokens: " + err.Error()))
 	}
+	err = cfg.DB.ResetApps(r.Context())
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Failed to reset apps: " + err.Error()))
+	}
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Database has been reset."))
 }
