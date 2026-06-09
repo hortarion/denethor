@@ -345,7 +345,7 @@ func (cfg *serverConfig) handleMessages(ctx context.Context, conn *websocket.Con
 					}
 					response = websocketMessage{
 						Channel: "console",
-						Token:   "",
+						Token:   "App Launcher",
 						Data:    "opening app launcher",
 					}
 				} else {

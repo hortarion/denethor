@@ -40,7 +40,7 @@ func (cfg *serverConfig) handleShout(ctx context.Context, client *Client, args [
 	}
 	message := websocketMessage{
 		Channel: "console",
-		Token:   "broadcast",
+		Token:   "",
 		Data:    messageData,
 	}
 	cfg.broadcast(message)

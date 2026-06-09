@@ -47,7 +47,7 @@ func AppLauncher(_, token, data string) (websocketMessage, string, error) {
 	case "back":
 		response = websocketMessage{
 			Channel: "app",
-			Token:   "",
+			Token:   "Console",
 			Data:    "returning back to console",
 		}
 		app = "console"

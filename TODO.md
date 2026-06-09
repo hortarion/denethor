@@ -2,5 +2,5 @@
 - create a proper app registry
 - launch command to change active app
 
-# backend/sql/
-- create app table
+# bugfix
+- update frontend App: <app> on refresh when active_app != console

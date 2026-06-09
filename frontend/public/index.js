@@ -68,6 +68,7 @@ const output = document.getElementById("output");
 const inputField = document.getElementById("inputField");
 const submitButton = document.getElementById("submitButton");
 const themeToggle = document.getElementById("themeToggle");
+const activeApp = document.getElementById("activeApp");
 const body = document.body;
 const MAX_LINES = 50;
 
@@ -198,11 +199,17 @@ function handleInputUpdate(packet) {
       if (packet.data.length === 0) {
         return;
       }
+      if (packet.token.length > 0) {
+        activeApp.textContent = "App: " + packet.token;
+      }
       printToPage(packet.data);
       break;
     case "console":
       if (packet.data.length === 0) {
         return;
+      }
+      if (packet.token.length > 0) {
+        activeApp.textContent = "App: " + packet.token;
       }
       printToPage(packet.data);
       break;
