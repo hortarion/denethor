@@ -15,20 +15,27 @@ This project utilizes a decoupled microservices-oriented approach:
 .
 ├── frontend/
 │   ├── public/
-│   │   ├── index.js
-│   │   └── index.html
+│   │   ├── favicon.ico
+│   │   ├── index.hmtl
+│   │   └── index.js
 │   └── frontend.go
 ├── backend/
 │   ├── backend.go
-│   ├── console.go
+│   ├── (...)
 │   └── internal/
-└── cache/
+│       ├── apps/
+│       ├── auth/
+│       ├── database/
+│       └── sql/
+│           ├── queries/
+│           └── schema/
+└── cache/ //not implemented
     └── valkey.conf
 ```
 
-## Infrastructure
-
-The entire stack is containerized for consistent development and deployment:
+## ToDo
+- Docker: Containerizing for deployment
+- Valkey: Cashing for increased DB requests
 
 * **Isolation**: Every component (Client, Server, DB, Valkey) runs in its own Docker container.
 * **Persistence**: A managed Docker volume ensures PostgreSQL data persists across container lifecycles.
@@ -56,7 +63,6 @@ docker-compose up --build
 
 3. Service Access
    - App Client: http://localhost:3000
-   - RabbitMQ Admin: http://localhost:15672 (User/Pass: guest/guest)
    - Valkey CLI: `docker exec -it valkey valkey-cli`
 
 ## Communication Flow
