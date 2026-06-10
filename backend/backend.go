@@ -268,6 +268,18 @@ func (cfg *serverConfig) writeMessages(wg *sync.WaitGroup, client *Client, conn 
 }
 
 func (cfg *serverConfig) handleMessages(ctx context.Context, conn *websocket.Conn, client *Client) {
+	// Inform frontend of activeApp
+	appInfo := websocketMessage{
+		Channel: "sys",
+		Token:   "app",
+		Data:    client.activeApp,
+	}
+	byteAppInfo, err := json.Marshal(appInfo)
+	if err != nil {
+		log.Printf("[SYS] %s failed to marshal appInfo", client.ID)
+	}
+	client.Outbound <- byteAppInfo
+
 	// Handle incoming messages
 	for {
 		conn.SetReadDeadline(time.Now().Add(10 * time.Minute))
@@ -287,20 +299,23 @@ func (cfg *serverConfig) handleMessages(ctx context.Context, conn *websocket.Con
 		log.Printf("[DEV] %s sent: %s\n", client.ID, params)
 		var response websocketMessage
 
+		// Flag app switch per iteration
+		appSwitched := false
+
 		// Routing websocketMessage to active_app
 		if client.activeApp == "appLauncher" {
 			appResponse, app, err := apps.AppLauncher(params.Channel, params.Token, params.Data)
 			if err != nil {
 				log.Printf("[APP] %s app launcher err: %s", client.ID, err)
 			}
-			if app != client.activeApp {
+			if app != client.activeApp && !appSwitched {
 				client.activeApp = app
 				_, err := cfg.DB.ChangeActiveApp(ctx, database.ChangeActiveAppParams{Username: client.ID, ActiveApp: sql.NullString{String: app, Valid: true}})
 				if err != nil {
 					log.Printf("[SYS] %s failed to switch to app: %s", client.ID, app)
 				}
+				appSwitched = true
 			}
-			client.activeApp = app
 			response = websocketMessage(appResponse)
 		} else {
 			// Default active_app == "console"
@@ -345,9 +360,10 @@ func (cfg *serverConfig) handleMessages(ctx context.Context, conn *websocket.Con
 					}
 					response = websocketMessage{
 						Channel: "console",
-						Token:   "App Launcher",
+						Token:   "appLauncher",
 						Data:    "opening app launcher",
 					}
+					appSwitched = true
 				} else {
 					response = websocketMessage{
 						Channel: "console",

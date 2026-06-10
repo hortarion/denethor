@@ -241,6 +241,9 @@ function handleSystemMessage(message) {
     case "RFT":
       storeRFT(message.data);
       break;
+    case "app":
+      activeApp.textContent = "App: " + message.data;
+      break;
     default:
       console.log("Unknown system message token:", message.token);
   }

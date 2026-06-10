@@ -1,6 +1,15 @@
 package apps
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
+
+type appCommand struct {
+	name        string
+	description string
+	message     websocketMessage
+}
 
 type websocketMessage struct {
 	Channel string `json:"channel"`
@@ -32,31 +41,86 @@ func InternalRegistry() {
 	}
 }
 
-func AppLauncher(_, token, data string) (websocketMessage, string, error) {
+func handleHelp(commands map[string]appCommand) string {
+	var cmdKeys = make([]string, 0, len(commands))
+	for k := range commands {
+		cmdKeys = append(cmdKeys, k)
+	}
+	sort.Strings(cmdKeys)
+	var helpMessage string
+	for _, key := range cmdKeys {
+		helpMessage += fmt.Sprintf("	> %s - %s\n", commands[key].name, commands[key].description)
+	}
+	return helpMessage
+}
+
+func appCommands() map[string]appCommand {
+	commands := map[string]appCommand{
+		"back": {
+			name:        "back",
+			description: "Back to console",
+			message: websocketMessage{
+				Channel: "app",
+				Token:   "console",
+				Data:    "returning back to console",
+			},
+		},
+		"clear": {
+			name:        "clear",
+			description: "Clear the screen",
+			message: websocketMessage{
+				Channel: "sys",
+				Token:   "clear",
+				Data:    "",
+			},
+		},
+		"help": {
+			name:        "help",
+			description: "Display available commands",
+			message: websocketMessage{
+				Channel: "app",
+				Token:   "",
+				Data:    "",
+			},
+		},
+		"launch": {
+			name:        "launch",
+			description: "Launches an app",
+			message: websocketMessage{
+				Channel: "app",
+				Token:   "",
+				Data:    "not implemented - this command will start app launcher",
+			},
+		},
+	}
+	return commands
+}
+
+func AppLauncher(_, _, data string) (websocketMessage, string, error) {
 	app := "appLauncher"
 	var response websocketMessage
 	// DEV log
-	fmt.Printf("[DEV] APP received token: %s, data: %s\n", token, data)
-	switch data {
-	case "launch":
+	fmt.Printf("[DEV] APP received data: %s\n", data)
+	if data == "help" {
 		response = websocketMessage{
 			Channel: "app",
 			Token:   "",
-			Data:    "not implemented - this command will start app launcher",
+			Data:    handleHelp(appCommands()),
 		}
-	case "back":
+		return response, app, nil
+	}
+	command, exists := appCommands()[data]
+	if exists {
+		response = command.message
+	} else {
 		response = websocketMessage{
 			Channel: "app",
-			Token:   "Console",
-			Data:    "returning back to console",
+			Token:   "",
+			Data:    "",
 		}
+	}
+	if data == "back" {
 		app = "console"
-	case "help":
-		response = websocketMessage{
-			Channel: "app",
-			Token:   "",
-			Data:    "App Launcher help message not implemented",
-		}
 	}
 	return response, app, nil
 }
