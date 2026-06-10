@@ -1,8 +1,13 @@
 package apps
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
+	"strings"
+
+	testapp "github.com/hortarion/server/internal/apps/testApp.go"
 )
 
 type appCommand struct {
@@ -17,31 +22,45 @@ type websocketMessage struct {
 	Data    string `json:"data"`
 }
 
-var serverContent = make(map[int]string)
-
-func registerContent(content string) {
-	serverContent[len(serverContent)] = content
+type app struct {
+	name        string
+	description string
+	callback    func() []byte
 }
 
-func returnContent() []string {
-	content := make([]string, 0)
-	for _, name := range serverContent {
-		content = append(content, name)
+var serverContent = make(map[string]app)
+
+var launched = false
+
+func registerContent(name, description string, callback func() []byte) {
+	serverContent[name] = app{
+		name:        name,
+		description: description,
+		callback:    callback,
 	}
-	return content
 }
 
-func InternalRegistry() {
-	registerContent("rockPaperScissors")
-	registerContent("more to come")
-	content := returnContent()
-	fmt.Println("Registered applications:")
-	for idx, item := range content {
-		fmt.Println(idx, "-", item)
+func internalRegistry() {
+	registerContent("testApp", "for testing", testapp.Main)
+	registerContent("rockPaperScissors", "not implemented", func() []byte { return []byte{} })
+}
+
+func listRegistry() string {
+	// Composes app registry message
+	var apps = make([]string, 0, len(serverContent))
+	for k := range serverContent {
+		apps = append(apps, k)
 	}
+	sort.Strings(apps)
+	var registryMessage string
+	for _, key := range apps {
+		registryMessage += fmt.Sprintf("    > %s - %s\n", serverContent[key].name, serverContent[key].description)
+	}
+	return registryMessage
 }
 
 func handleHelp(commands map[string]appCommand) string {
+	// Composes help message
 	var cmdKeys = make([]string, 0, len(commands))
 	for k := range commands {
 		cmdKeys = append(cmdKeys, k)
@@ -52,6 +71,16 @@ func handleHelp(commands map[string]appCommand) string {
 		helpMessage += fmt.Sprintf("	> %s - %s\n", commands[key].name, commands[key].description)
 	}
 	return helpMessage
+}
+
+func handleLaunch(appName string) websocketMessage {
+	byteResponse := serverContent[appName].callback()
+	message := websocketMessage{}
+	err := json.Unmarshal(byteResponse, &message)
+	if err != nil {
+		log.Printf("[SYS] failed to launch app %s", appName)
+	}
+	return message
 }
 
 func appCommands() map[string]appCommand {
@@ -89,7 +118,16 @@ func appCommands() map[string]appCommand {
 			message: websocketMessage{
 				Channel: "app",
 				Token:   "",
-				Data:    "not implemented - this command will start app launcher",
+				Data:    "",
+			},
+		},
+		"list": {
+			name:        "list",
+			description: "Lists available apps",
+			message: websocketMessage{
+				Channel: "app",
+				Token:   "",
+				Data:    "",
 			},
 		},
 	}
@@ -97,11 +135,23 @@ func appCommands() map[string]appCommand {
 }
 
 func AppLauncher(_, _, data string) (websocketMessage, string, error) {
+	if !launched {
+		internalRegistry()
+		log.Printf("Registry: %s\n", listRegistry())
+		launched = true
+	}
+
+	var args []string
+	args = strings.Split(data, " ")
+
 	app := "appLauncher"
 	var response websocketMessage
+
 	// DEV log
-	fmt.Printf("[DEV] APP received data: %s\n", data)
-	if data == "help" {
+	log.Printf("[DEV] APP received data: %s\n", data)
+
+	// App commands that require specific callbacks
+	if args[0] == "help" {
 		response = websocketMessage{
 			Channel: "app",
 			Token:   "",
@@ -109,7 +159,33 @@ func AppLauncher(_, _, data string) (websocketMessage, string, error) {
 		}
 		return response, app, nil
 	}
-	command, exists := appCommands()[data]
+	if args[0] == "launch" {
+		if len(args) != 2 {
+			response = websocketMessage{
+				Channel: "app",
+				Token:   "",
+				Data:    "to launch an app type: launch <appName>",
+			}
+			return response, app, nil
+		}
+		response = websocketMessage{
+			Channel: "app",
+			Token:   "",
+			Data:    handleLaunch(args[1]).Data,
+		}
+		return response, app, nil
+	}
+	if args[0] == "list" {
+		response = websocketMessage{
+			Channel: "app",
+			Token:   "",
+			Data:    listRegistry(),
+		}
+		return response, app, nil
+	}
+
+	// Command handling
+	command, exists := appCommands()[args[0]]
 	if exists {
 		response = command.message
 	} else {
@@ -119,7 +195,9 @@ func AppLauncher(_, _, data string) (websocketMessage, string, error) {
 			Data:    "",
 		}
 	}
-	if data == "back" {
+
+	// Update client.activeApp
+	if args[0] == "back" {
 		app = "console"
 	}
 	return response, app, nil
