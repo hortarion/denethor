@@ -26,6 +26,10 @@ The application is not supposed to be a deployable tool for real life usage. I w
 - register - Register a new user account
 - shout - Broadcast to all clients (_run a second page instance in a private window to test_)
 
+### Development APIs
+- server_url/status -> server status page
+- POST server_url/admin/reset -> reset database (requires PLATFORM=dev)
+  
 ## Architecture
 
 This project utilizes a decoupled microservices-oriented approach:

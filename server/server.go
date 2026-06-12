@@ -113,7 +113,7 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	// Might replace with brocker logic
+	// DEV APIs
 	mux.HandleFunc("/ws", cfg.handleConnection)
 	mux.HandleFunc("/status", handleStatusPage)
 	mux.HandleFunc("POST /admin/reset", cfg.handleReset)
