@@ -1,6 +1,30 @@
 # Denethor - A remote CLI tool 
 
-An online CLI platform leveraging a Go authoritative server, a Go web client with JS script and Valkey for caching.
+## About this project
+Denethor is a show case project based on a decoupled architecture with server backend and a client frontend.
+
+### Disclaimer
+This program is intended as a training and showcase based on boot.dev's back end developer course.
+The application is not supposed to be a deployable tool for real life usage. I will start a new single-application project for this.
+
+### Features
+- Client:
+  - Hosting a webpage with a simple CLI mockup
+- Server:
+  - Establishes a webSocket connection with the client
+  - Validates input
+  - Stores user credentials on postgreSQL database (hashed passwords)
+  - Launches build-in apps (show case only provides a test app)
+
+### Available commands
+- app - App launcher
+- clear - Clear the screen
+- help - Display available commands
+- login - Login to existing user account
+- logout - Logout from user account
+- ping - Ping the server
+- register - Register a new user account
+- shout - Broadcast to all clients (_run a second page instance in a private window to test_)
 
 ## Architecture
 
@@ -34,7 +58,7 @@ This project utilizes a decoupled microservices-oriented approach:
 ```
 
 ### Prerequisites
-* Docker Desktop
+* Docker && docker-compose
 * Go 1.21+ (for local server development)
 * Node.js 20+ (for client development)
 
@@ -59,8 +83,8 @@ docker-compose up --build
 
 ## Communication Flow
 
-1. **Ingress**: Client sends user command via WebSocket.
-2. **Processing**: The Go Server consumes the action, validates it and writes results to PostgreSQL.
-3. **Caching**: Valkey stores frequently accessed state for low-latency retrieval.
-4. **Egress**: The Server publishes the "Authoritative State" back to a global exchange.
-5. **Sync**: All Clients receive the update and reconcile their local state to match the Server.
+1. Client sends user command via WebSocket.
+2. The Go Server consumes the action, validates it and writes user data to PostgreSQL.
+3. **Caching**: Valkey not implemented.
+4. The Server publishes the "Authoritative State" back to client.
+5. All Clients receive the update and reconcile their local state to match the Server.
