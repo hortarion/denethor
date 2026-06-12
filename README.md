@@ -13,13 +13,13 @@ This project utilizes a decoupled microservices-oriented approach:
 
 ```
 .
-├── frontend/
+├── client/
 │   ├── public/
 │   │   ├── favicon.ico
 │   │   ├── index.hmtl
 │   │   └── index.js
 │   └── frontend.go
-├── backend/
+├── server/
 │   ├── backend.go
 │   ├── (...)
 │   └── internal/

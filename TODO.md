@@ -1,5 +1,7 @@
-# backend/internal/apps/
-- launch command to change active app
+# DOCKER
+- create docker images for 
+  - client
+  - server
+  - Postgres?
 
-# bugfix
-- AppLauncher: len(args) != 2 doesnt work for len(args) == 3?
+# Testing
