@@ -1,0 +1,11 @@
+version: "3.8"
+
+services:
+  denethor-server:
+    build: .
+    environment:
+      - PORT=8090
+      - FILE_PATH_ROOT=public
+      - PLATFORM=dev
+    ports:
+      - "8090:8090"

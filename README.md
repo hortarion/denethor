@@ -33,17 +33,6 @@ This project utilizes a decoupled microservices-oriented approach:
     └── valkey.conf
 ```
 
-## ToDo
-- Docker: Containerizing for deployment
-- Valkey: Cashing for increased DB requests
-
-* **Isolation**: Every component (Client, Server, DB, Valkey) runs in its own Docker container.
-* **Persistence**: A managed Docker volume ensures PostgreSQL data persists across container lifecycles.
-* **Caching**: Valkey container provides in-memory caching for performance-critical operations.
-* **Orchestration**: Docker Compose manages the internal networking and dependency startup order.
-
-## Getting Started
-
 ### Prerequisites
 * Docker Desktop
 * Go 1.21+ (for local server development)
@@ -62,8 +51,7 @@ docker-compose up --build
 ```
 
 3. Service Access
-   - App Client: http://localhost:3000
-   - Valkey CLI: `docker exec -it valkey valkey-cli`
+   - App Client: http://localhost:8090
 
 ## Communication Flow
 

@@ -27,7 +27,8 @@ func main() {
 	}
 	platform := os.Getenv("PLATFORM")
 	if platform == "" {
-		log.Fatal("PLATFORM must be set")
+		platform = "prod"
+		log.Println("PLATFORM set to prod")
 	}
 	filePathRoot := os.Getenv("FILE_PATH_ROOT")
 	if filePathRoot == "" {

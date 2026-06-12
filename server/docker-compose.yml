@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  denethor-server:
+    build: .
+    environment:
+      DB_URL: postgres://denethor:denethor@db:5433/denethor?sslmode=disable
+      PLATFORM: dev
+      ALLOWED_ORIGINS: http://localhost:8090
+      JWT_SECRET: lDVbqLNC2n/NGjgqJ0YEodcfEOXgPZ5T7q8XmuvZM+Pvz1vjKiBuidsnoj6aG6isJrqsLrEqcqTzm8X88EeuwA==
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: denethor
+      POSTGRES_PASSWORD: denethor
+      POSTGRES_DB: denethor
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5433"
+
+volumes:
+  postgres_data:
