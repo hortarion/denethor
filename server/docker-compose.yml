@@ -20,6 +20,7 @@ services:
       POSTGRES_USER: denethor
       POSTGRES_PASSWORD: denethor
       POSTGRES_DB: denethor
+    command: postgres -p 5433
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:

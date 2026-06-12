@@ -47,6 +47,10 @@ cd denethor
 
 2. Launch the stack
 ```bash
+cd denethor/server
+docker-compose up --build
+
+cd denethor/client
 docker-compose up --build
 ```
 
